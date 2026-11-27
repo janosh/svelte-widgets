@@ -77,7 +77,7 @@ Tab reaches the native file picker and removal, cancel or retry buttons. Activat
 
 ## ExportDestination
 
-The save-side counterpart: a file name field plus, where the File System Access API is usable (not in frames cross-origin to the top page), a folder picker. `FileExportState` from `svelte-widgets/browser` holds the destination and validates the name; its `run(task)` passes `save(data, filename, mime)` to the task, which writes into the chosen folder (refusing names that already exist, best effort since the API has no exclusive create) or falls back to a browser download. Long exports call `prepare(filename, signal)` first to fail on an existing file before encoding anything.
+The save-side counterpart: a file name field plus, where the File System Access API is usable (not in frames cross-origin to the top page), a choice of destination: browser downloads (the default), a picked folder, or a native Save As dialog for each file. `FileExportState` from `svelte-widgets/browser` holds the destination and validates the name; its `run(task)` passes the task `open(filename, mime, signal?)` and the `destination`, so an export writing several files can refuse Save As (one dialog per click) before asking. `open` checks the name before anything is encoded (a folder refuses names that already exist, best effort since the API has no exclusive create; Save As shows its dialog, which confirms overwrites itself) and resolves to a writer the task calls with the finished data. A dismissed Save As dialog (`open` rejects with `ExportCancelledError`) or the abort of a signal passed to `open` ends the export without an error message, and a picked file the export never wrote is removed again while empty.
 
 ```svelte example id="export-destination"
 <script lang="ts">
@@ -86,9 +86,10 @@ The save-side counterpart: a file name field plus, where the File System Access 
 
   const export_state = new FileExportState(() => `notes`)
   const save_notes = () =>
-    export_state.run(({ filename, save }) =>
-      save(`Hello`, `${filename}.txt`, `text/plain`),
-    )
+    export_state.run(async ({ filename, open }) => {
+      const write = await open(`${filename}.txt`, `text/plain`)
+      await write(`Hello`)
+    })
 </script>
 
 <ExportDestination state={export_state} />

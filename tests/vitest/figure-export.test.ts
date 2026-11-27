@@ -1,12 +1,10 @@
 import {
-  canvas_painters,
   dpi_to_scale,
-  html_to_svg,
+  export_figure,
   observe_canvas_presence,
-  paint_png_blob,
+  set_export_painter,
   set_png_dpi,
-  svg_to_png_blob,
-  svg_to_string,
+  type FigureExportOptions,
 } from '#lib/figure-export.ts'
 import { crc32 } from 'node:zlib'
 import { next_task as flush } from './index'
@@ -80,9 +78,12 @@ const mock_offscreen_canvas = (): HTMLCanvasElement & {
   const canvas = {
     width: 0,
     height: 0,
-    getContext: vi
-      .fn()
-      .mockReturnValue({ clearRect: vi.fn(), drawImage: vi.fn(), scale: vi.fn() }),
+    getContext: vi.fn().mockReturnValue({
+      clearRect: vi.fn(),
+      drawImage: vi.fn(),
+      fillRect: vi.fn(),
+      scale: vi.fn(),
+    }),
     toBlob: make_mock_toBlob(),
   }
   vi.spyOn(document, `createElement`).mockReturnValue(canvas as unknown as HTMLElement)
@@ -192,22 +193,29 @@ const mount_svg = (markup: string): SVGSVGElement => {
   if (!svg) throw new Error(`svg not mounted`)
   return svg
 }
+// SVG file content of a figure
+const svg_markup = async (
+  root: SVGElement | HTMLElement,
+  options: Omit<FigureExportOptions, `format`> = {},
+): Promise<string> => (await export_figure(root, { ...options, format: `svg` })).text()
+const png_of = (svg: SVGElement, dpi?: number): Promise<Blob> =>
+  export_figure(svg, { format: `png`, dpi })
 // `markup` mounted, exported and parsed back
-const export_svg = (markup: string): Element =>
-  parse_svg(svg_to_string(mount_svg(markup)))
+const export_svg = async (markup: string): Promise<Element> =>
+  parse_svg(await svg_markup(mount_svg(markup)))
 
-describe(`svg_to_string`, () => {
+describe(`export_figure as SVG`, () => {
   test.each([
     [undefined, false],
     [`0 0 200 150`, false],
     [`0 0 100 100`, true],
   ])(
     `emits standalone SVG with viewBox=%s, xmlns=%s without mutation`,
-    (viewbox, xmlns) => {
+    async (viewbox, xmlns) => {
       const svg = make_svg(viewbox)
       if (xmlns) svg.setAttribute(`xmlns`, `http://www.w3.org/2000/svg`)
       const original_attrs = svg.attributes.length
-      const result = svg_to_string(svg)
+      const result = await svg_markup(svg)
       expect(result).toMatch(/^<\?xml version="1\.0" encoding="UTF-8"\?>\n<svg /)
       expect(result).not.toContain(`<!DOCTYPE`)
       expect(result.match(/xmlns="http:\/\/www\.w3\.org\/2000\/svg"/g)).toHaveLength(1)
@@ -225,28 +233,27 @@ describe(`svg_to_string`, () => {
     { attribute_width: `2`, style_width: `8px`, expected: `-4 -4 108 58` },
   ])(
     `pads the viewBox by half the widest stroke $style_width`,
-    ({ attribute_width, style_width, expected }) => {
+    async ({ attribute_width, style_width, expected }) => {
       const svg = make_svg(`0 0 100 50`)
       const rect = document.createElementNS(`http://www.w3.org/2000/svg`, `rect`)
       rect.setAttribute(`stroke`, `black`)
       rect.setAttribute(`stroke-width`, attribute_width)
       if (style_width) rect.style.strokeWidth = style_width
       svg.append(rect)
-      expect(svg_to_string(svg)).toContain(`viewBox="${expected}"`)
+      expect(await svg_markup(svg)).toContain(`viewBox="${expected}"`)
       expect(svg.getAttribute(`viewBox`)).toBe(`0 0 100 50`)
     },
   )
 
-  test(`renames random ids stably per figure, with every same-document reference`, () => {
+  test(`renames random ids stably per figure, with every same-document reference`, async () => {
     // refs before their defs, spaced and double-quoted url(), xlink:href, a duplicate id,
     // an id on the root and a ref to an id outside the figure
     const figure = (uid: string, width = 9) =>
       `<svg id="root-${uid}" viewBox="0 0 10 10"><g clip-path="url( #clip-${uid} )"><rect fill="url('#grad-${uid}')" style='mask: url("#clip-${uid}")' width="${width}" height="9"/><use href="#grad-${uid}"/><use xlink:href="#grad-${uid}"/><use href="#gone-${uid}"/><a href="https://x.y/#keep"/></g><defs><clipPath id="clip-${uid}"><rect width="5" height="5"/></clipPath><linearGradient id="grad-${uid}"/><linearGradient id="grad-${uid}"/></defs></svg>`
-    const [first, second, other] = [
-      figure(`1e3126d8`),
-      figure(`9b2c44f0`),
-      figure(`1e3126d8`, 8),
-    ].map((markup) => svg_to_string(mount_svg(markup)))
+    const exports: string[] = []
+    for (const markup of [figure(`1e3126d8`), figure(`9b2c44f0`), figure(`1e3126d8`, 8)])
+      exports.push(await svg_markup(mount_svg(markup)))
+    const [first, second, other] = exports
     expect(first).toBe(second)
     const exported = parse_svg(first)
     const prefix = exported.id.replace(/-0$/, ``)
@@ -274,12 +281,12 @@ describe(`svg_to_string`, () => {
     ])
   })
 
-  test(`inlines stylesheet colors and fonts minimally and drops redundant attributes`, () => {
+  test(`inlines stylesheet colors and fonts minimally and drops redundant attributes`, async () => {
     const style = document.createElement(`style`)
     style.textContent = `.tick-label { fill: rgb(200, 0, 0); font-size: 13px } .themed { stroke: rgb(0, 0, 200); stroke-width: 3px }`
     document.head.append(style)
     onTestFinished(() => style.remove())
-    const exported = export_svg(
+    const exported = await export_svg(
       `<svg viewBox="0 0 100 100" style="cursor: crosshair" class="svelte-4hqm71"><g fill="blue" style="font-weight: 700"><text class="tick-label svelte-1stqk4m svelte-widgets-legend" style="font-weight: normal">1</text><rect class="themed" width="10" height="10"/><circle fill="blue" r="2"/></g></svg>`,
     )
     const [text, rect, circle] = [`text`, `rect`, `circle`].map((tag) =>
@@ -300,7 +307,7 @@ describe(`svg_to_string`, () => {
     expect(exported.getAttributeNames()).not.toContain(`style`) // interaction-only cursor
   })
 
-  test(`strips hidden, transparent and interaction-only markup but keeps export-only`, () => {
+  test(`strips hidden, transparent and interaction-only markup but keeps export-only`, async () => {
     const svg = mount_svg(`<svg viewBox="0 0 100 100" role="application" tabindex="0">
       <!-- svelte anchor -->
       <rect class="visible" width="5" height="5" fill="red" data-series-id="a" aria-label="bar"/>
@@ -313,7 +320,7 @@ describe(`svg_to_string`, () => {
       <text data-export-only display="none">static label</text>
       <defs><clipPath id="clip"><rect width="5" height="5" fill="none"/></clipPath><path id="glyph" fill="rgb(0, 0, 0)" d="M0 0h1"/></defs>
     </svg>`)
-    const result = svg_to_string(svg)
+    const result = await svg_markup(svg)
     const exported = parse_svg(result)
     expect(exported.querySelectorAll(`rect`)).toHaveLength(2) // the visible one + clip shape
     expect(exported.querySelector(`circle, line`)).toBeNull()
@@ -328,10 +335,10 @@ describe(`svg_to_string`, () => {
     expect(result).not.toMatch(/<!--|data-|aria-|role=|tabindex=/)
   })
 
-  test(`rounds a 100-unit figure to 2 decimals, leaving text, classes, hrefs and url() refs`, () => {
+  test(`rounds a 100-unit figure to 2 decimals, leaving text, classes, hrefs and url() refs`, async () => {
     const attrs = `clip-path="url(#plot-clip-1a2b3c4d-4f3e-4234-9e12-3e4f5a6b7c8d)" class="x-3e-4" stroke="black"`
     const path = `<path id="p0.123456" d="M1.23456,2.5L-3.00499,4.1234e-7" transform="scale(0.004)" ${attrs}/>`
-    const exported = export_svg(
+    const exported = await export_svg(
       `<svg viewBox="0 0 100.123456 100">${path}<text x="10.98765">0.123456</text></svg>`,
     )
     const attr = (name: string) => exported.querySelector(`path`)?.getAttribute(name)
@@ -350,8 +357,8 @@ describe(`svg_to_string`, () => {
     [`0 0 1 1`, [`0.5123`, `0.004`, `1`]],
     [`0 0 0.02 0.004`, [`0.5123457`, `0.004`, `0.004`]],
     [`0 0 1000 400`, [`0.51`, `0`, `400`]],
-  ])(`rounds to the precision viewBox=%s resolves`, (viewbox, expected) => {
-    const exported = export_svg(
+  ])(`rounds to the precision viewBox=%s resolves`, async (viewbox, expected) => {
+    const exported = await export_svg(
       `<svg viewBox="${viewbox}"><circle cx="0.51234567" r="0.004"/></svg>`,
     )
     const circle = exported.querySelector(`circle`)
@@ -371,12 +378,14 @@ describe(`svg_to_string`, () => {
     [`M1.23456-2.5`, `M1.23-2.5`],
     // leading zeros are packed arc flags, not numbers to round
     [`a5 5 0 011.123456 2`, `a5 5 0 011.123456 2`],
-  ])(`rounding keeps compact path numbers apart: %s -> %s`, (d_in, d_out) => {
-    const exported = export_svg(`<svg viewBox="0 0 100 100"><path d="${d_in}"/></svg>`)
+  ])(`rounding keeps compact path numbers apart: %s -> %s`, async (d_in, d_out) => {
+    const exported = await export_svg(
+      `<svg viewBox="0 0 100 100"><path d="${d_in}"/></svg>`,
+    )
     expect(exported.querySelector(`path`)?.getAttribute(`d`)).toBe(d_out)
   })
 
-  test(`a 1000-point chart exports at under a third of its raw markup`, () => {
+  test(`a 1000-point chart exports at under a third of its raw markup`, async () => {
     const style = document.createElement(`style`)
     style.textContent = `.series { fill: rgb(31, 119, 180); stroke: white; stroke-width: 0.5px }`
     document.head.append(style)
@@ -390,7 +399,7 @@ describe(`svg_to_string`, () => {
     const svg = mount_svg(
       `<svg viewBox="0 0 400 400"><g class="series">${points}</g></svg>`,
     )
-    const result = svg_to_string(svg)
+    const result = await svg_markup(svg)
     expect(result.length).toBeLessThan(svg.outerHTML.length / 3)
     const exported = parse_svg(result)
     const circles = exported.querySelectorAll(`circle`)
@@ -400,25 +409,44 @@ describe(`svg_to_string`, () => {
     expect(circles[0].getAttributeNames().toSorted()).toEqual([`class`, `cx`, `cy`, `r`])
   })
 
-  test(`embeds foreign canvases via their registered painter at the export scale`, () => {
+  test(`embeds foreign canvases via their export painter at the export scale`, async () => {
     const svg = mount_svg(
       `<svg viewBox="0 0 100 50"><foreignObject x="0" y="0" width="100" height="50"><canvas width="100" height="50"></canvas></foreignObject></svg>`,
     )
     const canvas = svg.querySelector(`canvas`)
     if (!canvas) throw new Error(`canvas not mounted`)
     Object.assign(canvas, { width: 100, height: 50 })
-    const painter = vi.fn((target: HTMLCanvasElement) => {
-      target.toDataURL = () => `data:image/png;base64,PAINTED`
-    })
-    canvas_painters.set(canvas, painter)
-    const image = parse_svg(svg_to_string(svg)).querySelector(`image`)
-    expect(painter).toHaveBeenCalledExactlyOnceWith(expect.any(HTMLCanvasElement), 2)
-    expect(image?.getAttribute(`href`)).toBe(`data:image/png;base64,PAINTED`)
+    canvas.toDataURL = () => `data:image/png;base64,LIVE`
+    const painter = (label: string) =>
+      vi.fn((target: HTMLCanvasElement) => {
+        target.toDataURL = () => `data:image/png;base64,${label}`
+      })
+    const exported_href = async (dpi?: number) =>
+      parse_svg(await svg_markup(svg, { dpi })).querySelector(`image`)
+    const first = painter(`FIRST`)
+    const remove_first = set_export_painter(canvas, first)
+    // stored under a registered symbol, so a duplicate copy of the package finds it too
+    expect(Reflect.get(canvas, Symbol.for(`svelte-widgets.export-painter`))).toBe(first)
+    const image = await exported_href(216)
+    expect(first).toHaveBeenCalledExactlyOnceWith(expect.any(HTMLCanvasElement), 3)
+    expect(image?.getAttribute(`href`)).toBe(`data:image/png;base64,FIRST`)
     expect(image?.getAttribute(`width`)).toBe(`100`)
+    // a stale cleanup keeps the painter that replaced it; the current one's removes it
+    const second = painter(`SECOND`)
+    const remove_second = set_export_painter(canvas, second)
+    remove_first()
+    expect((await exported_href())?.getAttribute(`href`)).toBe(
+      `data:image/png;base64,SECOND`,
+    )
+    expect(second).toHaveBeenCalledWith(expect.any(HTMLCanvasElement), 2)
+    remove_second()
+    expect((await exported_href())?.getAttribute(`href`)).toBe(
+      `data:image/png;base64,LIVE`,
+    )
   })
 })
 
-test(`html_to_svg redraws backgrounds and text in CSS stacking order, skipping excluded nodes`, () => {
+test(`HTML figures redraw backgrounds and text in CSS stacking order, skipping excluded nodes`, async () => {
   // like a split periodic-table tile: value label (z 2) before its segment (z 1) in the DOM
   document.body.innerHTML = `<div class="tile">
     <span style="position: absolute; z-index: 2">18</span>
@@ -436,7 +464,7 @@ test(`html_to_svg redraws backgrounds and text in CSS stacking order, skipping e
   vi.spyOn(Range.prototype, `getBoundingClientRect`).mockReturnValue(
     new DOMRect(0, 0, 10, 10),
   )
-  const exported = parse_svg(svg_to_string(html_to_svg(tile)))
+  const exported = parse_svg(await svg_markup(tile))
   expect(exported.getAttribute(`viewBox`)).toBe(`0 0 40 20`)
   const group = exported.querySelector(`g`)
   const painted = [...(group?.children ?? [])].map((node) =>
@@ -449,15 +477,19 @@ test(`html_to_svg redraws backgrounds and text in CSS stacking order, skipping e
   expect(group?.querySelector(`path`)?.getAttribute(`vector-effect`)).toBe(
     `non-scaling-stroke`,
   )
-  // overlays must not inherit a chart root's centered text or stroke
-  const raw_group = html_to_svg(tile).querySelector(`g`)
-  expect([`text-anchor`, `stroke`].map((attr) => raw_group?.getAttribute(attr))).toEqual([
+  // a chart's overlays must not inherit its root's centered text or stroke
+  document.body.innerHTML = `<div><svg viewBox="0 0 40 20" text-anchor="middle" stroke="red"></svg><div data-export-overlay><span>legend</span></div></div>`
+  const chart = document.querySelector(`svg`)
+  if (!chart) throw new Error(`chart not mounted`)
+  const overlay = parse_svg(await svg_markup(chart)).querySelector(`svg > g`)
+  expect([`text-anchor`, `stroke`].map((attr) => overlay?.getAttribute(attr))).toEqual([
     `start`,
     `none`,
   ])
+  expect(overlay?.querySelector(`text`)?.textContent).toBe(`legend`)
 })
 
-describe(`svg_to_png_blob`, () => {
+describe(`export_figure as PNG`, () => {
   let mock_canvas_element: HTMLCanvasElement
   let object_url: ReturnType<typeof mock_object_url>
 
@@ -478,7 +510,7 @@ describe(`svg_to_png_blob`, () => {
     [`0 0 100 100`, 0, `Invalid PNG DPI`],
     [`0 0 100 100`, NaN, `Invalid PNG DPI`],
   ])(`rejects viewBox %s at %s DPI`, async (viewbox, dpi, message) => {
-    await expect(svg_to_png_blob(make_svg(viewbox), dpi)).rejects.toThrow(message)
+    await expect(png_of(make_svg(viewbox), dpi)).rejects.toThrow(message)
   })
 
   // CSS sizes (100x50px) override the width/height attributes (80x40): export follows the
@@ -508,7 +540,7 @@ describe(`svg_to_png_blob`, () => {
       }
       document.body.append(svg)
       // the declared DPI is the one rendered, past dpi_to_scale's 720 DPI cap
-      expect((await read_png(await svg_to_png_blob(svg, dpi))).dpi).toBeCloseTo(
+      expect((await read_png(await png_of(svg, dpi))).dpi).toBeCloseTo(
         Math.min(dpi, 720),
         1,
       )
@@ -527,14 +559,19 @@ describe(`svg_to_png_blob`, () => {
   )
 
   test(`rejects when canvas 2D context unavailable`, async () => {
+    // createElementNS: createElement is mocked
+    const canvas = document.createElementNS(`http://www.w3.org/1999/xhtml`, `canvas`)
+    if (!(canvas instanceof HTMLCanvasElement)) throw new TypeError(`expected a canvas`)
+    Object.assign(canvas, { width: 3, height: 3 })
     vi.spyOn(document, `createElement`).mockReturnValue({
       getContext: vi.fn().mockReturnValue(null),
     } as unknown as HTMLElement)
-    await expect(svg_to_png_blob(make_svg(`0 0 100 100`))).rejects.toThrow(
+    await expect(png_of(make_svg(`0 0 100 100`))).rejects.toThrow(
       `Canvas 2D context not available`,
     )
-    // a rejection, not a synchronous throw, so promise-chained callers see it too
-    await expect(paint_png_blob(1, 1, 1, () => {})).rejects.toThrow(
+    // a rejection, not a synchronous throw, so promise-chained callers see it too: a canvas
+    // root drawn at a size other than its own needs a 2D context as well
+    await expect(export_figure(canvas, { format: `png` })).rejects.toThrow(
       `Canvas 2D context not available`,
     )
   })
@@ -557,7 +594,7 @@ describe(`svg_to_png_blob`, () => {
         if (outcome === `empty`) callback(null)
       })
     const size = outcome === `image-slow` ? 4000 : 100
-    const result = svg_to_png_blob(make_svg(`0 0 ${size} ${size}`), 72).catch(
+    const result = png_of(make_svg(`0 0 ${size} ${size}`), 72).catch(
       (error: unknown) => error,
     )
     await vi.runAllTimersAsync()
@@ -575,6 +612,155 @@ describe(`svg_to_png_blob`, () => {
   })
 })
 
+describe(`export_figure of a canvas`, () => {
+  // a frame canvas with a canvas layer over its right half and an HTML legend, the frame
+  // laid out at 40x20 CSS px
+  const mount_scene = () => {
+    document.body.innerHTML = `<div><canvas class="frame"></canvas><canvas class="layer"></canvas><div class="legend" style="background-color: rgb(255, 0, 0)"><span>Fe</span></div></div>`
+    const [frame, layer] = document.querySelectorAll(`canvas`)
+    const legend = document.querySelector<HTMLElement>(`.legend`)
+    if (!frame || !layer || !legend) throw new Error(`scene not mounted`)
+    layer.toDataURL = () => `data:image/png;base64,LAYER`
+    vi.spyOn(Element.prototype, `getBoundingClientRect`).mockImplementation(function (
+      this: Element,
+    ) {
+      return this === layer ? new DOMRect(30, 15, 20, 10) : new DOMRect(10, 10, 40, 20)
+    })
+    vi.spyOn(Range.prototype, `getBoundingClientRect`).mockReturnValue(
+      new DOMRect(12, 12, 10, 10),
+    )
+    const render_frame = vi.fn(async () => png_blob())
+    return { frame, layer, legend, render_frame }
+  }
+
+  test(`SVG embeds the frame, then canvas layers, then HTML overlays as vectors`, async () => {
+    const { frame, layer, legend, render_frame } = mount_scene()
+    const blob = await export_figure(frame, {
+      format: `svg`,
+      dpi: 216,
+      background: `white`,
+      overlays: [legend, layer],
+      render_frame,
+    })
+    expect(render_frame).toHaveBeenCalledExactlyOnceWith(frame, 216)
+    expect(blob.type).toBe(`image/svg+xml`)
+    const exported = parse_svg(await blob.text())
+    expect(
+      [`viewBox`, `width`, `height`].map((attr) => exported.getAttribute(attr)),
+    ).toEqual([`0 0 40 20`, `40`, `20`])
+    const layers = [...exported.children].map(
+      (node) =>
+        `${node.localName} ${node.getAttribute(`fill`) ?? node.getAttribute(`href`)?.slice(0, 27) ?? ``}`,
+    )
+    expect(layers).toEqual([
+      `rect white`, // the backdrop, under everything
+      `image data:image/png;base64,iVBOR`,
+      `image data:image/png;base64,LAYER`,
+      `g `,
+    ])
+    const layer_image = exported.querySelectorAll(`image`)[1]
+    expect(
+      [`x`, `y`, `width`, `height`].map((attr) => layer_image.getAttribute(attr)),
+    ).toEqual([`20`, `5`, `20`, `10`])
+    expect(exported.querySelector(`g text`)?.textContent).toBe(`Fe`)
+    expect(exported.querySelector(`g rect`)?.getAttribute(`fill`)).toBe(`rgb(255, 0, 0)`)
+  })
+
+  test(`PNG composites frame, layers and the rasterized HTML overlays at export resolution`, async () => {
+    const { frame, layer, legend, render_frame } = mount_scene()
+    // without overlays or a backdrop the frame is the file
+    const frame_png = png_blob()
+    render_frame.mockResolvedValueOnce(frame_png)
+    expect(await export_figure(frame, { format: `png`, render_frame })).toBe(frame_png)
+    const target = mock_offscreen_canvas()
+    const object_url = mock_object_url()
+    const images = mock_image(`load`)
+    const bitmap = { close: vi.fn() }
+    vi.stubGlobal(
+      `createImageBitmap`,
+      vi.fn(async () => bitmap),
+    )
+    const png = await export_figure(frame, {
+      format: `png`,
+      background: `white`,
+      overlays: [legend, layer],
+      render_frame,
+    })
+    expect((await read_png(png)).dpi).toBeCloseTo(144, 1)
+    expect([target.width, target.height]).toEqual([80, 40])
+    target.getContext(`2d`)
+    const ctx = target.getContext.mock.results[0].value as Record<
+      `scale` | `fillRect` | `drawImage`,
+      ReturnType<typeof vi.fn>
+    > & { fillStyle?: string }
+    expect(ctx.scale).toHaveBeenCalledExactlyOnceWith(2, 2)
+    expect(ctx.fillStyle).toBe(`white`)
+    expect(ctx.fillRect).toHaveBeenCalledExactlyOnceWith(0, 0, 40, 20)
+    expect(ctx.drawImage.mock.calls).toEqual([
+      [bitmap, 0, 0, 40, 20],
+      [layer, 20, 5, 20, 10],
+      [images[0], 0, 0, 40, 20],
+    ])
+    expect(bitmap.close).toHaveBeenCalledOnce()
+    // the HTML overlays rasterize sized in export pixels, without the canvas layer
+    const overlay_svg = parse_svg(
+      await (object_url.create.mock.calls[0][0] as Blob).text(),
+    )
+    expect(
+      [`width`, `height`, `viewBox`].map((attr) => overlay_svg.getAttribute(attr)),
+    ).toEqual([`80`, `40`, `0 0 40 20`])
+    expect(overlay_svg.querySelector(`text`)?.textContent).toBe(`Fe`)
+    expect(overlay_svg.querySelector(`image`)).toBeNull()
+    // a backdrop alone still composites: the frame is drawn over it
+    ctx.drawImage.mockClear()
+    await export_figure(frame, { format: `png`, background: `black`, render_frame })
+    expect(ctx.fillStyle).toBe(`black`)
+    expect(ctx.drawImage.mock.calls).toEqual([[bitmap, 0, 0, 40, 20]])
+  })
+
+  test(`the default frame repaints through the export painter at the export scale`, async () => {
+    const { frame } = mount_scene()
+    const target = mock_offscreen_canvas()
+    const painter = vi.fn()
+    set_export_painter(frame, painter)
+    const png = await export_figure(frame, { format: `png`, dpi: 216 })
+    expect(painter).toHaveBeenCalledExactlyOnceWith(target, 3)
+    expect((await read_png(png)).dpi).toBeCloseTo(216, 1)
+  })
+
+  test.each([
+    [`an unlaid canvas`, `canvas`, `Cannot export a canvas that has not been laid out`],
+    [
+      `overlays on an SVG root`,
+      `svg`,
+      `overlays and render_frame apply to canvas figures only`,
+    ],
+  ])(`rejects %s`, async (_label, root_kind, message) => {
+    const { frame, legend, render_frame } = mount_scene()
+    vi.spyOn(Element.prototype, `getBoundingClientRect`).mockReturnValue(new DOMRect())
+    const root = root_kind === `canvas` ? frame : make_svg(`0 0 10 10`)
+    await expect(
+      // @ts-expect-error -- the overloads keep canvas-only options off non-canvas roots
+      export_figure(root, { format: `svg`, overlays: [legend], render_frame }),
+    ).rejects.toThrow(message)
+    // checked before the (possibly GPU) frame render
+    expect(render_frame).not.toHaveBeenCalled()
+  })
+})
+
+test(`a background paints the whole padded viewBox behind an SVG figure`, async () => {
+  const svg = mount_svg(
+    `<svg viewBox="0 0 100 50" aria-label="Chart"><rect width="10" height="10" stroke="black" stroke-width="4"/></svg>`,
+  )
+  const exported = parse_svg(await svg_markup(svg, { background: `rgb(1, 2, 3)` }))
+  const [title, backdrop] = exported.children
+  expect(title.localName).toBe(`title`)
+  expect(
+    [`x`, `y`, `width`, `height`, `fill`].map((attr) => backdrop.getAttribute(attr)),
+  ).toEqual([`-2`, `-2`, `100%`, `100%`, `rgb(1, 2, 3)`])
+  expect(exported.getAttribute(`viewBox`)).toBe(`-2 -2 104 54`)
+})
+
 // Computed color-bar backgrounds, whose colors carry their own commas, become SVG gradients.
 // Only the `to right` / `to top` form is recognized; any other background paints nothing.
 // oxfmt-ignore
@@ -589,12 +775,12 @@ test.each([
   [`linear-gradient(to top right, red, blue)`, null],
   [`linear-gradient(0.5turn, red, blue)`, null],
   [`none`, null],
-])(`html_to_svg redraws background %s as an SVG gradient`, (background, expected) => {
+])(`HTML figures redraw background %s as an SVG gradient`, async (background, expected) => {
   const bar = document.createElement(`div`)
   bar.style.backgroundImage = background
   document.body.replaceChildren(bar)
   vi.spyOn(Element.prototype, `getBoundingClientRect`).mockReturnValue(new DOMRect(0, 0, 40, 20))
-  const svg = html_to_svg(bar)
+  const svg = parse_svg(await svg_markup(bar))
   const gradient = svg.querySelector(`linearGradient`)
   const rect = svg.querySelector(`rect`)
   if (!expected) {

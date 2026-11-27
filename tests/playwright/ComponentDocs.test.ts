@@ -162,6 +162,59 @@ test(`FileInput example reports parse errors then displays and removes valid JSO
   await expect(demo.locator(`> p`)).toHaveText(`No JSON preview available.`)
 })
 
+test(`ExportDestination example downloads by default and asks per file with Save As`, async ({
+  page,
+}) => {
+  // a stand-in for the native dialog, recording its options and the bytes written
+  await page.addInitScript(() => {
+    const record = { options: [] as unknown[], written: `` }
+    Object.assign(globalThis, {
+      save_picker_record: record,
+      showSaveFilePicker: async (options: unknown) => {
+        record.options.push(options)
+        return {
+          createWritable: async () =>
+            new WritableStream<Uint8Array>({
+              write(chunk) {
+                record.written += new TextDecoder().decode(chunk)
+              },
+            }),
+        }
+      },
+    })
+  })
+  await goto(page, `/file-input`, { waitUntil: `networkidle` })
+  const demo = page.locator(`#export-destination`)
+  await expect(demo.getByText(`Browser downloads`)).toBeVisible()
+  const save = demo.getByRole(`button`, { name: `Save as .txt` })
+  const [download] = await Promise.all([page.waitForEvent(`download`), save.click()])
+  expect(download.suggestedFilename()).toBe(`notes.txt`)
+  // accessible names are the visible labels
+  await demo.getByRole(`button`, { name: `Ask each time`, exact: true }).click()
+  await expect(demo.getByText(`Ask for each file`)).toBeVisible()
+  await save.click()
+  await expect
+    .poll(() => page.evaluate(() => Reflect.get(globalThis, `save_picker_record`)))
+    .toEqual({
+      options: [
+        {
+          id: `file-export`,
+          suggestedName: `notes.txt`,
+          types: [{ accept: { 'text/plain': [`.txt`] } }],
+        },
+      ],
+      written: `Hello`,
+    })
+  await expect(
+    demo.getByRole(`button`, { name: `Ask each time`, exact: true }),
+  ).toHaveAttribute(`aria-pressed`, `true`)
+  await demo.getByRole(`button`, { name: `Downloads`, exact: true }).click()
+  await expect(demo.getByText(`Browser downloads`)).toBeVisible()
+  await expect(
+    demo.getByRole(`button`, { name: `Choose folder…`, exact: true }),
+  ).toHaveAttribute(`aria-pressed`, `false`)
+})
+
 test(`SplitPane example sizes panes and restores keyboard collapse`, async ({ page }) => {
   await goto(page, `/split-pane`, { waitUntil: `networkidle` })
   const demo = page.locator(`#split-pane-basic`)

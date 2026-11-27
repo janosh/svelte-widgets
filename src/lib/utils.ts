@@ -378,6 +378,30 @@ export async function abortable<Value>(
   }
 }
 
+// `operation`'s result, or an Error naming `message` once `timeout_ms` passes first
+export async function with_timeout<Value>(
+  operation: () => Promise<Value>,
+  timeout_ms: number,
+  message: string,
+): Promise<Value> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      operation(),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${message} timed out after ${timeout_ms}ms`)),
+          timeout_ms,
+        )
+      }),
+    ])
+  } catch (error) {
+    throw to_error(error)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 // Yield one event-loop turn via a message task: setTimeout(0) is clamped to 4 ms once timers
 // nest, which in a long chunked loop leaves the main thread idle for much of its budget.
 export const yield_turn = (): Promise<void> =>

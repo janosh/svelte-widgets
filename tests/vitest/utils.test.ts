@@ -24,6 +24,7 @@ import {
   to_error,
   value_key,
   with_defaults,
+  with_timeout,
   yield_turn,
 } from '#lib/utils.ts'
 import {
@@ -1169,6 +1170,26 @@ describe(`abortable`, () => {
       await expect(run).rejects.toThrow(new Error(`gone`))
     },
   )
+})
+
+// the operation's outcome as an Error either way, or a timeout naming it, never a leaked timer
+test.each<[string, () => Promise<number>, number | string]>([
+  [`resolves`, async () => 3, 3],
+  // oxlint-disable-next-line prefer-promise-reject-errors -- non-Errors become Errors
+  [`rejects with a non-Error`, () => Promise.reject(`gone`), `gone`],
+  [`times out`, () => new Promise<never>(() => {}), `encode timed out after 50ms`],
+])(`with_timeout when the operation %s`, async (label, operation, expected) => {
+  vi.useFakeTimers()
+  try {
+    const result = with_timeout(operation, 50, `encode`).catch((error: unknown) => error)
+    if (label === `times out`) await vi.advanceTimersByTimeAsync(50)
+    if (typeof expected === `number`) expect(await result).toBe(expected)
+    else expect(await result).toEqual(new Error(expected))
+    // settled before the deadline: its timer is cleared, not left to fire
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 test(`yield_turn resolves after a macrotask, not within the current microtask run`, async () => {

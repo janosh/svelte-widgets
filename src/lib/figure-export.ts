@@ -1,22 +1,39 @@
-// Standalone figure export: live SVG (and HTML laid out as a figure) to self-contained SVG
-// markup or a PNG declaring its DPI. The DOM conventions it honors:
+// Standalone figure export: a live SVG chart, an HTML element laid out as a figure, or a
+// canvas (2D or WebGL/WebGPU) with HTML laid over it, as self-contained SVG markup or a PNG
+// declaring its DPI, all through export_figure. The DOM conventions it honors:
 // - `data-export-exclude`: element (and subtree) left out of exports
 // - `data-export-only`: static stand-in, hidden on screen (display: none), shown in exports
 // - `data-export-overlay`: HTML root laid over a chart's SVG (legend, color bar), a sibling
 //   or descendant of the SVG's parent, redrawn as SVG at its on-screen position
-// - `canvas_painters`: canvases inside a <foreignObject> repaint at export resolution
-import { clamp, get_uuid, hash_string, to_error } from './utils'
+// - set_export_painter: canvases repaint at export resolution instead of being upscaled
+import { blob_to_data_url } from './browser/download'
+import { clamp, get_uuid, hash_string, to_error, with_timeout } from './utils'
 
 // Default PNG resolution: exactly 2x CSS pixels
 export const DEFAULT_PNG_DPI = 144
 
-// Repaints a foreignObject canvas onto another canvas at a given pixel ratio. Charts register
-// one per canvas so SVG/PNG export embeds the marks at export resolution, not as an
-// upscaled screen bitmap.
-export const canvas_painters = new WeakMap<
-  HTMLCanvasElement,
-  (target: HTMLCanvasElement, pixel_ratio: number) => void
->()
+// Repaints a canvas's content onto `target`, sizing it, at `pixel_ratio` device pixels per
+// CSS pixel. Charts register one per canvas so exports draw the marks at export resolution,
+// not as an upscaled screen bitmap.
+export type ExportPainter = (target: HTMLCanvasElement, pixel_ratio: number) => void
+
+// Stored on the canvas under a registered symbol, so duplicate copies of this package (an
+// app and a library each bundling one) still find each other's painters
+const EXPORT_PAINTER: unique symbol = Symbol.for(`svelte-widgets.export-painter`)
+type PaintableCanvas = HTMLCanvasElement & { [EXPORT_PAINTER]?: ExportPainter }
+
+// Register `painter` as the way exports redraw `canvas`. Returns a cleanup that removes it
+// (unless another painter replaced it since), suited to returning from an $effect.
+export function set_export_painter(
+  canvas: HTMLCanvasElement,
+  painter: ExportPainter,
+): () => void {
+  const paintable: PaintableCanvas = canvas
+  paintable[EXPORT_PAINTER] = painter
+  return () => {
+    if (paintable[EXPORT_PAINTER] === painter) paintable[EXPORT_PAINTER] = undefined
+  }
+}
 
 // PNG DPI -> render scale relative to the 72 DPI baseline, capped at 10x. DPI floors
 // at 1 (non-finite -> 72) so bad inputs can't yield 0x0 canvases or NaN pixel ratios.
@@ -26,30 +43,6 @@ export const dpi_to_scale = (png_dpi: number): number =>
 // Encoding cost grows with image pixels or recording size, but stalled exports stay bounded.
 export const export_timeout_ms = (estimated_megabytes: number): number =>
   Math.min(300_000, 30_000 + estimated_megabytes * 1000)
-
-// `operation`'s result, or an Error naming `message` once `timeout_ms` passes first
-export async function with_timeout<Value>(
-  operation: () => Promise<Value>,
-  timeout_ms: number,
-  message: string,
-): Promise<Value> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    return await Promise.race([
-      operation(),
-      new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(
-          () => reject(new Error(`${message} timed out after ${timeout_ms}ms`)),
-          timeout_ms,
-        )
-      }),
-    ])
-  } catch (error) {
-    throw to_error(error)
-  } finally {
-    clearTimeout(timer)
-  }
-}
 
 // CRC-32 of PNG chunk types and data (ISO 3309, as zlib computes it)
 const CRC_TABLE = Uint32Array.from({ length: 256 }, (_, byte) => {
@@ -99,7 +92,8 @@ export async function set_png_dpi(png: Blob, png_dpi: number): Promise<Blob> {
   return new Blob(parts as Uint8Array<ArrayBuffer>[], { type: `image/png` })
 }
 
-// A canvas's pixels as a PNG declaring `png_dpi`, its encode bounded by export_timeout_ms
+// A canvas's pixels as a PNG declaring `png_dpi`, its encode bounded by export_timeout_ms.
+// Public for frame sources that render their own canvas (see render_frame).
 export const encode_canvas_png = (
   canvas: HTMLCanvasElement,
   png_dpi: number,
@@ -119,7 +113,7 @@ export const encode_canvas_png = (
 // PNG of a scene drawn in CSS pixels: `paint` runs on a fresh canvas pre-scaled by `scale`,
 // so canvas-drawn marks come out crisp instead of as an upscaled screen bitmap. `png_dpi` is
 // the resolution the file declares, by default the one `scale` realizes (see dpi_to_scale).
-export async function paint_png_blob(
+async function paint_png_blob(
   width: number,
   height: number,
   scale: number,
@@ -138,7 +132,7 @@ export async function paint_png_blob(
 
 // === SVG serialization ===
 
-export const SVG_NS = `http://www.w3.org/2000/svg`
+const SVG_NS = `http://www.w3.org/2000/svg`
 
 // Paint properties a standalone SVG must carry itself (it loses the page stylesheets), with
 // their initial values. Inherited ones are written only where they change from the parent,
@@ -245,11 +239,11 @@ function renders_nothing(live: Element, styles: ResolvedStyles): boolean {
 
 // A <canvas> inside a <foreignObject> is a live bitmap, not markup: the serializer would emit
 // an empty element. Swap it for an <image> of its pixels, repainted at `scale` when the chart
-// registered a painter for it (see canvas_painters) so raster exports stay sharp.
+// registered a painter for it (see set_export_painter) so raster exports stay sharp.
 function foreign_canvas_image(live: Element, scale: number): SVGImageElement | null {
   const canvas = live.querySelector(`canvas`)
   if (!canvas?.width || !canvas.height) return null
-  const painter = canvas_painters.get(canvas)
+  const painter = (canvas as PaintableCanvas)[EXPORT_PAINTER]
   let source = canvas
   if (painter) {
     source = document.createElement(`canvas`)
@@ -436,11 +430,13 @@ function svg_viewbox(svg: SVGElement, padding = 0): SvgViewbox | null {
 // minimally, HTML overlays (legends, color bars) redrawn as SVG, hidden and interaction-only
 // elements dropped, coordinates rounded (see fraction_digits), and the viewBox padded by half
 // the widest stroke so edge strokes aren't clipped. Foreign canvases embed at `scale`; a
-// raster export also sizes the root to its viewBox times `scale` in pixels.
+// raster export also sizes the root to its viewBox times `scale` in pixels. A `background`
+// paints the whole viewBox behind the figure.
 function serialize_svg(
   svg: SVGElement,
   scale: number,
-  raster = false,
+  raster: boolean,
+  background: string | undefined,
 ): { markup: string; size: [width: number, height: number] | null } {
   const clone = svg.cloneNode(true) as SVGElement
   const state: WalkState = { max_stroke: 0, raster_scale: scale }
@@ -456,13 +452,26 @@ function serialize_svg(
     for (const group of overlays.groups)
       group.setAttribute(`transform`, overlays.transform)
   renumber_ids(clone)
+  const viewbox = svg_viewbox(svg, state.max_stroke / 2)
+  if (background !== undefined) {
+    const [x, y] = (viewbox ?? [0, 0]).map((coord) =>
+      round_decimals(String(coord), digits),
+    )
+    const backdrop = svg_el(`rect`, {
+      x,
+      y,
+      width: `100%`,
+      height: `100%`,
+      fill: background,
+    })
+    clone.prepend(backdrop)
+  }
   // the figure's accessible name, as a <title> since minify_clone drops aria attributes
   const name = svg.getAttribute(`aria-label`)
   if (name)
     clone.prepend(
       Object.assign(document.createElementNS(SVG_NS, `title`), { textContent: name }),
     )
-  const viewbox = svg_viewbox(svg, state.max_stroke / 2)
   // Floor at 1px: small viewBoxes at low DPI round to 0 and make toBlob fail confusingly
   const size: [number, number] | null = viewbox
     ? ([viewbox[2], viewbox[3]].map((len) =>
@@ -477,35 +486,9 @@ function serialize_svg(
   return { markup: new XMLSerializer().serializeToString(clone), size }
 }
 
-// Standalone SVG file content of a live figure (see serialize_svg), canvases embedded at png_dpi
-export const svg_to_string = (svg: SVGElement, png_dpi = DEFAULT_PNG_DPI): string =>
-  `<?xml version="1.0" encoding="UTF-8"?>\n${serialize_svg(svg, dpi_to_scale(png_dpi)).markup}`
-
-// Rasterize a live SVG figure at `png_dpi` (72 DPI = one pixel per viewBox unit)
-export async function svg_to_png_blob(
-  svg: SVGElement,
-  png_dpi = DEFAULT_PNG_DPI,
-): Promise<Blob> {
-  if (!Number.isFinite(png_dpi) || png_dpi <= 0)
-    throw new Error(`Invalid PNG DPI for export`)
-  const scale = dpi_to_scale(png_dpi)
-  const { markup, size } = serialize_svg(svg, scale, true)
-  if (!size) throw new Error(`Invalid SVG dimensions for PNG export`)
-  const [width, height] = size
-  return with_svg_image(markup, width * height, (img) =>
-    paint_png_blob(
-      width,
-      height,
-      1,
-      (ctx) => ctx.drawImage(img, 0, 0, width, height),
-      scale * 72,
-    ),
-  )
-}
-
 // Load SVG markup into an <img> (timeout scaled by its pixel count), run `use` on it, then
 // release the object URL
-export async function with_svg_image<Value>(
+async function with_svg_image<Value>(
   markup: string,
   n_pixels: number,
   use: (img: HTMLImageElement) => Promise<Value>,
@@ -550,7 +533,7 @@ const set_attrs = <El extends Element>(element: El, attrs: Attrs): El => {
     element.setAttribute(name, String(value))
   return element
 }
-export const svg_el = (tag: string, attrs: Attrs): SVGElement =>
+const svg_el = (tag: string, attrs: Attrs): SVGElement =>
   set_attrs(document.createElementNS(SVG_NS, tag), attrs)
 
 const SIDE_DEGREES: Record<string, number> = { top: 0, right: 90, bottom: 180, left: 270 }
@@ -589,7 +572,7 @@ function parse_linear_gradient(background_image: string) {
 // Redraw an HTML overlay as SVG in the coordinate frame of `origin` (the chart SVG's box):
 // solid and gradient backgrounds become rects, nested SVGs (legend markers) are cloned in
 // place, text runs become <text> at their laid-out position with the computed font.
-export function overlay_to_svg(root: HTMLElement, origin: DOMRect): SVGElement {
+function overlay_to_svg(root: HTMLElement, origin: DOMRect): SVGElement {
   // clipPath and linearGradient never render themselves, so they can live in the group. The
   // reset paints stop it inheriting the chart root's (e.g. a centered text-anchor)
   const group = svg_el(`g`, { 'text-anchor': `start`, stroke: `none` })
@@ -718,7 +701,7 @@ function export_overlays(svg: SVGElement): {
 
 // An HTML element (e.g. a CSS-grid heatmap) as a standalone SVG: the overlay redraw applied
 // to the element itself inside an SVG of its size, so HTML figures share the SVG/PNG path
-export function html_to_svg(element: HTMLElement): SVGSVGElement {
+function html_to_svg(element: HTMLElement): SVGSVGElement {
   const rect = element.getBoundingClientRect()
   if (!(rect.width > 0 && rect.height > 0))
     throw new Error(`Cannot export an element that has not been laid out (zero size)`)
@@ -727,6 +710,179 @@ export function html_to_svg(element: HTMLElement): SVGSVGElement {
   }) as SVGSVGElement
   svg.append(overlay_to_svg(element, rect))
   return svg
+}
+
+// === Figure export ===
+
+export interface FigureExportOptions {
+  format: `svg` | `png`
+  // PNG resolution (72 DPI = one pixel per CSS px or viewBox unit), also the resolution
+  // canvases embed at in SVG output
+  dpi?: number
+  // CSS color painted behind the figure (default: transparent)
+  background?: string
+}
+
+// Options only a canvas root takes (the export_figure overloads keep them off other roots)
+export interface CanvasFigureOptions extends FigureExportOptions {
+  // Elements laid over the canvas, at their on-screen boxes. Canvases are
+  // stacked on the frame as raster layers, then HTML (legends, color bars, scene labels) is
+  // redrawn on top as vector SVG, as chart overlays are.
+  overlays?: readonly HTMLElement[]
+  // The frame as a PNG at `dpi`, e.g. a GPU re-render of the scene at
+  // export resolution. Default: the canvas's export painter (see set_export_painter) on a
+  // fresh canvas, else its current pixels scaled to the export size.
+  render_frame?: (canvas: HTMLCanvasElement, dpi: number) => Promise<Blob>
+}
+
+const SVG_MIME = `image/svg+xml`
+const svg_file = (markup: string): Blob =>
+  new Blob([`<?xml version="1.0" encoding="UTF-8"?>\n${markup}`], { type: SVG_MIME })
+
+// The default frame of a canvas root at `dpi` (see CanvasFigureOptions.render_frame)
+async function draw_frame(canvas: HTMLCanvasElement, dpi: number): Promise<Blob> {
+  const scale = dpi_to_scale(dpi)
+  const export_dpi = scale * 72 // the DPI the scale realizes, after dpi_to_scale's clamping
+  const painter = (canvas as PaintableCanvas)[EXPORT_PAINTER]
+  if (painter) {
+    const target = document.createElement(`canvas`)
+    painter(target, scale)
+    return encode_canvas_png(target, export_dpi)
+  }
+  const width = Math.max(1, Math.round((canvas.clientWidth || canvas.width) * scale))
+  const height = Math.max(1, Math.round((canvas.clientHeight || canvas.height) * scale))
+  if (width === canvas.width && height === canvas.height)
+    return encode_canvas_png(canvas, export_dpi)
+  return paint_png_blob(
+    width,
+    height,
+    1,
+    (ctx) => ctx.drawImage(canvas, 0, 0, width, height),
+    export_dpi,
+  )
+}
+
+// A canvas frame with `overlays` laid over it. The frame is encoded (a presented WebGPU canvas
+// reads back blank) and embedded or drawn as is; overlay boxes are CSS px from the canvas's.
+async function export_canvas_figure(
+  canvas: HTMLCanvasElement,
+  format: FigureExportOptions[`format`],
+  dpi: number,
+  background: string | undefined,
+  overlays: readonly HTMLElement[],
+  render_frame: (canvas: HTMLCanvasElement, dpi: number) => Promise<Blob>,
+): Promise<Blob> {
+  // a bare PNG frame needs no layout; anything composited on it is checked before rendering
+  if (format === `png` && overlays.length === 0 && background === undefined)
+    return render_frame(canvas, dpi)
+  const origin = canvas.getBoundingClientRect()
+  if (!(origin.width > 0 && origin.height > 0))
+    throw new Error(`Cannot export a canvas that has not been laid out (zero size)`)
+  const frame = await render_frame(canvas, dpi)
+  const { width, height } = origin
+  const scale = dpi_to_scale(dpi)
+  const layers = overlays.filter(
+    (overlay): overlay is HTMLCanvasElement => overlay instanceof HTMLCanvasElement,
+  )
+  const html_overlays = overlays.filter(
+    (overlay) => !(overlay instanceof HTMLCanvasElement),
+  )
+  const layer_box = (layer: HTMLCanvasElement) => {
+    const rect = layer.getBoundingClientRect()
+    return [
+      rect.left - origin.left,
+      rect.top - origin.top,
+      rect.width,
+      rect.height,
+    ] as const
+  }
+  const svg = svg_el(`svg`, { viewBox: `0 0 ${width} ${height}` })
+  if (format === `svg`) {
+    // serialized like an HTML figure (stable ids, rounded coordinates); data URLs as hrefs
+    // are never rounded
+    const image = (href: string, [x, y, w, h]: readonly number[]) =>
+      svg_el(`image`, { href, x, y, width: w, height: h })
+    svg.append(image(await blob_to_data_url(frame), [0, 0, width, height]))
+    for (const layer of layers)
+      svg.append(image(layer.toDataURL(`image/png`), layer_box(layer)))
+    for (const overlay of html_overlays) svg.append(overlay_to_svg(overlay, origin))
+    return svg_file(serialize_svg(svg, scale, false, background).markup)
+  }
+  // HTML overlays rasterize as one SVG image sized in export pixels, as crisp as the frame
+  set_attrs(svg, {
+    xmlns: SVG_NS,
+    width: Math.round(width * scale),
+    height: Math.round(height * scale),
+  })
+  for (const overlay of html_overlays) svg.append(overlay_to_svg(overlay, origin))
+  const bitmap = await createImageBitmap(frame)
+  const paint = (img?: HTMLImageElement) =>
+    paint_png_blob(width, height, scale, (ctx) => {
+      if (background !== undefined) {
+        ctx.fillStyle = background
+        ctx.fillRect(0, 0, width, height)
+      }
+      ctx.drawImage(bitmap, 0, 0, width, height)
+      for (const layer of layers) ctx.drawImage(layer, ...layer_box(layer))
+      if (img) ctx.drawImage(img, 0, 0, width, height)
+    })
+  try {
+    if (html_overlays.length === 0) return await paint()
+    const markup = new XMLSerializer().serializeToString(svg)
+    return await with_svg_image(markup, width * height * scale ** 2, paint)
+  } finally {
+    bitmap.close()
+  }
+}
+
+// A live figure as a standalone SVG file or a PNG declaring `dpi`, never mutating it. `root`:
+// - an SVG chart: computed paint styles inlined minimally, its HTML overlays (siblings marked
+//   data-export-overlay) redrawn as SVG, hidden and interaction-only elements dropped,
+//   coordinates rounded and the viewBox padded by half the widest stroke
+// - any other HTML element (e.g. a CSS-grid heatmap): redrawn as SVG the same way overlays are
+// - a canvas: its frame (see `render_frame`) with `overlays` laid over it, embedded as an
+//   <image> under vector overlays in SVG output
+// SVG markup comes from `(await export_figure(root, { format: 'svg' })).text()`.
+export function export_figure(
+  root: HTMLCanvasElement,
+  options: CanvasFigureOptions,
+): Promise<Blob>
+export function export_figure(
+  root: SVGElement | HTMLElement,
+  options: FigureExportOptions,
+): Promise<Blob>
+export async function export_figure(
+  root: SVGElement | HTMLElement,
+  options: CanvasFigureOptions,
+): Promise<Blob> {
+  const {
+    format,
+    dpi = DEFAULT_PNG_DPI,
+    background,
+    overlays = [],
+    render_frame = draw_frame,
+  } = options
+  if (!Number.isFinite(dpi) || dpi <= 0) throw new Error(`Invalid PNG DPI for export`)
+  if (root instanceof HTMLCanvasElement)
+    return export_canvas_figure(root, format, dpi, background, overlays, render_frame)
+  if (overlays.length > 0 || options.render_frame)
+    throw new Error(`overlays and render_frame apply to canvas figures only`)
+  const svg = root instanceof SVGElement ? root : html_to_svg(root)
+  const scale = dpi_to_scale(dpi)
+  if (format === `svg`)
+    return svg_file(serialize_svg(svg, scale, false, background).markup)
+  const { markup, size } = serialize_svg(svg, scale, true, background)
+  if (!size) throw new Error(`Invalid SVG dimensions for PNG export`)
+  const [width, height] = size
+  return with_svg_image(markup, width * height, (img) =>
+    paint_png_blob(
+      width,
+      height,
+      1,
+      (ctx) => ctx.drawImage(img, 0, 0, width, height),
+      scale * 72,
+    ),
+  )
 }
 
 // Watch a wrapper element for <canvas> insertion/removal: calls set with its first canvas (or

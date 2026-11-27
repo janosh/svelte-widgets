@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { FileExportState } from './browser/file-export.svelte.ts'
+  import { file_pickers, PICKER_ID } from './internal/file-pickers'
   import { to_error } from './utils'
 
   let {
@@ -7,37 +8,17 @@
     disabled = false,
   }: { state: FileExportState; disabled?: boolean } = $props()
   let choosing = $state(false)
-  // Chromium defines showDirectoryPicker in every frame but rejects it in one cross-origin to
-  // the top-level page (a VS Code webview, a notebook's output iframe). Reading the top frame's
-  // origin throws exactly there, so that read is the feature test.
-  const same_origin_as_top = (): boolean => {
-    try {
-      return globalThis.top?.location.origin === globalThis.location.origin
-    } catch {
-      return false
-    }
-  }
-  const directory_picker = same_origin_as_top()
-    ? (
-        globalThis as typeof globalThis & {
-          showDirectoryPicker?: (options: {
-            id: string
-            mode: `readwrite`
-            startIn: FileSystemDirectoryHandle | `downloads`
-          }) => Promise<FileSystemDirectoryHandle>
-        }
-      ).showDirectoryPicker
-    : undefined
-
+  const pickers = file_pickers()
   async function choose_folder() {
-    if (!directory_picker || choosing) return
+    if (!pickers.directory || choosing) return
     choosing = true
     export_state.error = ``
+    const { destination } = export_state
     try {
-      export_state.directory = await directory_picker.call(globalThis, {
-        id: `file-export`,
+      export_state.destination = await pickers.directory({
+        id: PICKER_ID,
         mode: `readwrite`,
-        startIn: export_state.directory ?? `downloads`,
+        startIn: typeof destination === `string` ? `downloads` : destination,
       })
     } catch (error) {
       if (!(error instanceof DOMException && error.name === `AbortError`)) {
@@ -60,28 +41,46 @@
       title="Base file name; the selected format adds its extension"
     />
   </label>
-  <!-- Only a browser that can pick a folder has a destination to choose; elsewhere exports go
+  <!-- Only a browser with a file picker has a destination to choose; elsewhere exports go
     where the browser or the host app's download hook sends them, which this row cannot name -->
-  {#if directory_picker}<div class="destination-row">
+  {#if pickers.directory || pickers.save}
+    {@const { destination } = export_state}
+    <div class="destination-row">
       <span>Save to</span>
-      <span class="folder-name" title={export_state.directory?.name}>
-        {export_state.directory ? `${export_state.directory.name}/` : `Browser downloads`}
-      </span>
-      <button
-        type="button"
-        aria-label="Choose export folder"
-        onclick={choose_folder}
-        title="Choose a folder before exporting">Choose folder…</button
+      <span
+        class="folder-name"
+        title={typeof destination === `string` ? undefined : destination.name}
       >
-      {#if export_state.directory}
+        {destination === `downloads`
+          ? `Browser downloads`
+          : destination === `save-as`
+            ? `Ask for each file`
+            : `${destination.name}/`}
+      </span>
+      <!-- one toggle per destination, always rendered so a click never removes the focused
+        button; aria-pressed marks the current one -->
+      {#if pickers.directory}
         <button
           type="button"
-          aria-label="Use browser downloads"
-          onclick={() => (export_state.directory = null)}
+          aria-pressed={typeof destination !== `string`}
+          onclick={choose_folder}
+          title="Choose a folder before exporting">Choose folder…</button
         >
-          Reset
-        </button>
       {/if}
+      {#if pickers.save}
+        <button
+          type="button"
+          aria-pressed={destination === `save-as`}
+          onclick={() => (export_state.destination = `save-as`)}
+          title="Open a Save As dialog for every export">Ask each time</button
+        >
+      {/if}
+      <button
+        type="button"
+        aria-pressed={destination === `downloads`}
+        onclick={() => (export_state.destination = `downloads`)}
+        title="Save to browser downloads">Downloads</button
+      >
     </div>{/if}
 </fieldset>
 {#if export_state.filename_error || export_state.error}

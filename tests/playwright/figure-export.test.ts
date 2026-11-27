@@ -52,12 +52,12 @@ test(`exports a stylesheet clip-path with its reference renamed alongside the cl
       <g clip-path="url(#authored-clip)"><rect width="100" height="100" fill="blue"/></g>
     </svg>`,
   )
-  const clips = await page.evaluate(() => {
-    const { svg_to_string } = (globalThis as unknown as Module).figure_export
+  const clips = await page.evaluate(async () => {
+    const { export_figure } = (globalThis as unknown as Module).figure_export
     const svg = document.querySelector(`svg`)
     if (!svg) throw new Error(`missing svg`)
     const exported = new DOMParser().parseFromString(
-      svg_to_string(svg),
+      await (await export_figure(svg, { format: `svg` })).text(),
       `image/svg+xml`,
     ).documentElement
     // each group's clip-path must name a clipPath in the file, with the expected rect
@@ -93,13 +93,13 @@ for (const [viewbox, size] of [
         </div>
       </div></body>`,
     )
-    const boxes = await page.evaluate((style) => {
-      const { svg_to_string } = (globalThis as unknown as Module).figure_export
+    const boxes = await page.evaluate(async (style) => {
+      const { export_figure } = (globalThis as unknown as Module).figure_export
       const svg = document.querySelector(`svg`)
       if (!svg) throw new Error(`missing svg`)
       const live = [...document.querySelectorAll(`[data-export-overlay], span`)]
       const exported = new DOMParser().parseFromString(
-        svg_to_string(svg),
+        await (await export_figure(svg, { format: `svg` })).text(),
         `image/svg+xml`,
       ).documentElement
       exported.setAttribute(`style`, `display: block; ${style}`)
@@ -124,3 +124,59 @@ for (const [viewbox, size] of [
     if (viewbox === `0 0 400 300`) expect(boxes.transform).toBeNull()
   })
 }
+
+// canvas roots composite in the browser: the frame (here the canvas's own pixels), a canvas
+// layer at its box and HTML redrawn over both, all at the export resolution
+test(`canvas figures composite frame, canvas layers and HTML overlays into the PNG`, async ({
+  page,
+}) => {
+  await load_figure_export(
+    page,
+    `<body style="margin: 0"><div style="position: relative; width: 40px; height: 20px">
+      <canvas class="frame" width="40" height="20" style="position: absolute; width: 40px; height: 20px"></canvas>
+      <canvas class="layer" width="10" height="10" style="position: absolute; left: 30px; top: 10px; width: 10px; height: 10px"></canvas>
+      <div style="position: absolute; left: 0; top: 0; width: 10px; height: 10px; background: rgb(0, 0, 255)"></div>
+    </div></body>`,
+  )
+  const pixels = await page.evaluate(async () => {
+    const { export_figure } = (globalThis as unknown as Module).figure_export
+    const [frame, layer] = document.querySelectorAll(`canvas`)
+    const fill = (canvas: HTMLCanvasElement, color: string) => {
+      const ctx = canvas.getContext(`2d`)
+      if (!ctx) throw new Error(`no 2d context`)
+      ctx.fillStyle = color
+      ctx.fillRect(0, 0, canvas.width / 2, canvas.height) // left half only
+    }
+    fill(frame, `rgb(255, 0, 0)`)
+    fill(layer, `rgb(0, 255, 0)`)
+    const overlay = document.querySelector<HTMLElement>(`div > div`)
+    if (!overlay) throw new Error(`missing overlay`)
+    const png = await export_figure(frame, {
+      format: `png`,
+      dpi: 144,
+      background: `rgb(255, 255, 255)`,
+      overlays: [layer, overlay],
+    })
+    const bitmap = await createImageBitmap(png)
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+    const ctx = canvas.getContext(`2d`)
+    if (!ctx) throw new Error(`no 2d context`)
+    ctx.drawImage(bitmap, 0, 0)
+    // export px (2x CSS) at: the HTML overlay, the bare frame, the backdrop, the layer
+    const at = (x: number, y: number) => [...ctx.getImageData(x, y, 1, 1).data].join(`,`)
+    return {
+      size: [bitmap.width, bitmap.height],
+      overlay: at(5, 5),
+      frame: at(30, 30),
+      backdrop: at(50, 10),
+      layer: at(65, 30),
+    }
+  })
+  expect(pixels).toEqual({
+    size: [80, 40],
+    overlay: `0,0,255,255`,
+    frame: `255,0,0,255`,
+    backdrop: `255,255,255,255`,
+    layer: `0,255,0,255`,
+  })
+})
