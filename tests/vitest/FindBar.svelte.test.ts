@@ -132,7 +132,7 @@ describe(`FindBar`, () => {
     flushSync() // attachments run before a user could focus anything
     input().focus()
     expect(press_key(input(), `Escape`).defaultPrevented).toBe(true)
-    expect(on_close).toHaveBeenCalledTimes(2)
+    expect(on_close.mock.calls).toEqual([[{ via: `close` }], [{ via: `escape` }]])
     expect(outer).not.toHaveBeenCalled()
   })
 
