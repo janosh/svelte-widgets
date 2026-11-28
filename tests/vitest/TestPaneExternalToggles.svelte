@@ -10,8 +10,11 @@
     open = $bindable(false),
     on_open,
     on_close,
-  }: Pick<PaneProps, `dismiss_on` | `on_open` | `on_close`> & {
+  }: {
+    dismiss_on?: PaneProps[`dismiss_on`]
     open?: boolean
+    on_open?: PaneProps[`on_open`]
+    on_close?: PaneProps[`on_close`]
   } = $props()
   let persistent = $state(false)
 </script>
