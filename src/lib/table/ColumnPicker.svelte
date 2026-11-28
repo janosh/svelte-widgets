@@ -66,14 +66,11 @@
     description?: Snippet<[{ column: Col }]>
   } = $props()
 
-  const change_open = track_open<ColumnPopoverCloseVia>(
+  const change_open = track_open<ColumnPopoverOpenVia, ColumnPopoverCloseVia>(
     () => open,
     (value) => (open = value),
-    (is_open, via) => {
-      // only the trigger and a bound `open` change can open it
-      if (is_open) on_open?.({ via: via === `trigger` ? via : `programmatic` })
-      else on_close?.({ via })
-    },
+    () => on_open,
+    () => on_close,
   )
 
   const msg = $derived(merge_defaults(COLUMN_PICKER_LABELS, labels))

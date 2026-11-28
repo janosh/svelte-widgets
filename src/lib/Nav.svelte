@@ -96,15 +96,13 @@
   const unique_id = $props.id()
   const script_tag = `script` // a literal tag in the template would end this <script>
   const panel_id = `nav-menu-${unique_id}`
-  const change_open = track_open<NavCloseVia>(
+  const change_open = track_open<NavOpenVia, NavCloseVia>(
     () => open,
     (value) => (open = value),
-    (is_open, via) => {
-      if (is_open) on_open?.({ via: via === `trigger` ? via : `programmatic` })
-      else {
-        open_dropdown = null
-        on_close?.({ via })
-      }
+    () => on_open,
+    () => (detail) => {
+      open_dropdown = null
+      on_close?.(detail)
     },
   )
   $effect(() => {

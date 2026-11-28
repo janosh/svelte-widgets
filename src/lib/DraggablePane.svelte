@@ -127,13 +127,11 @@
   const gutter = (edge: `right` | `bottom`) =>
     resize_edges.includes(edge) ? `${resize_gutter_px}px` : null
 
-  const change_open = track_open<DraggablePaneCloseVia>(
+  const change_open = track_open<DraggablePaneOpenVia, DraggablePaneCloseVia>(
     () => open,
     (value) => (open = value),
-    (is_open, via) => {
-      if (is_open) on_open?.({ via: via === `trigger` ? via : `programmatic` })
-      else on_close?.({ via })
-    },
+    () => on_open,
+    () => on_close,
   )
   const close_pane = (via: DraggablePaneCloseVia) => {
     // display: none drops focus on the body; hand it back to the toggle instead

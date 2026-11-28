@@ -36,13 +36,11 @@
   const dialog_id = $derived(id ?? unique_id)
   let focus_origin: HTMLElement | SVGElement | null = null
   let pending_close_via: Exclude<DialogCloseVia, `programmatic`> | null = null
-  const change_open = track_open<DialogOpenVia | DialogCloseVia>(
+  const change_open = track_open<DialogOpenVia, DialogCloseVia>(
     () => open,
     (value) => (open = value),
-    (is_open, via) => {
-      if (is_open) on_open?.({ via: via === `trigger` ? via : `programmatic` })
-      else on_close?.({ via: via === `trigger` ? `programmatic` : via })
-    },
+    () => on_open,
+    () => on_close,
   )
 
   const close = (via: Exclude<DialogCloseVia, `programmatic`>) => {

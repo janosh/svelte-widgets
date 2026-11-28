@@ -173,14 +173,11 @@
     prev_scroll_target_distance = Infinity
   }
 
-  const change_open = track_open<TocCloseVia>(
+  const change_open = track_open<TocOpenVia, TocCloseVia>(
     () => open,
     (value) => (open = value),
-    (is_open, via) => {
-      // only the toggle and a bound `open` change can open the ToC
-      if (is_open) on_open?.({ via: via === `trigger` ? via : `programmatic`, desktop })
-      else on_close?.({ via, desktop })
-    },
+    () => on_open && (({ via }) => on_open?.({ via, desktop })),
+    () => on_close && (({ via }) => on_close?.({ via, desktop })),
   )
 
   type LiEvent = (MouseEvent | KeyboardEvent) & {

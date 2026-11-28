@@ -172,13 +172,11 @@
     if (input && document.activeElement !== input) input.focus()
   })
 
-  const change_open = track_open<CommandMenuCloseVia>(
+  const change_open = track_open<CommandMenuOpenVia, CommandMenuCloseVia>(
     () => open,
     (value) => (open = value),
-    (is_open, via) => {
-      if (is_open) on_open?.({ via: via === `shortcut` ? via : `programmatic` })
-      else on_close?.({ via })
-    },
+    () => on_open,
+    () => on_close,
   )
 
   function close_menu(via: CommandMenuCloseVia) {

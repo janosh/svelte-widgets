@@ -86,13 +86,11 @@
     clear_close_timeout()
   }
 
-  const change_open = track_open<PopoverCloseVia>(
+  const change_open = track_open<PopoverOpenVia, PopoverCloseVia>(
     () => open,
     (value) => (open = value),
-    (is_open, via) => {
-      if (is_open) on_open?.({ via: via === `trigger` ? via : `programmatic` })
-      else on_close?.({ via })
-    },
+    () => on_open,
+    () => on_close,
   )
   const close = (via: PopoverCloseVia) => {
     clear_timeouts()

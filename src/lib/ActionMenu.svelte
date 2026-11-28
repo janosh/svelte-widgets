@@ -132,19 +132,14 @@
   }
   // where a context-mode open places the menu, read by the setter below
   let next_at: { x: number; y: number } | null = null
-  const change_open = track_open<ActionMenuOpenVia | ActionMenuCloseVia>(
+  const change_open = track_open<ActionMenuOpenVia, ActionMenuCloseVia>(
     () => (trigger_snippet ? open : Boolean(at)),
     (value) => {
       if (trigger_snippet) open = value
       else at = value ? next_at : null
     },
-    (is_open, via) => {
-      if (is_open)
-        on_open?.({
-          via: via === `trigger` || via === `contextmenu` ? via : `programmatic`,
-        })
-      else on_close?.({ via: via === `contextmenu` ? `programmatic` : via })
-    },
+    () => on_open,
+    () => on_close,
   )
   const close = (via: ActionMenuCloseVia) => change_open(false, via)
   // disabling an open menu closes it, so its items can't run while the trigger is disabled
