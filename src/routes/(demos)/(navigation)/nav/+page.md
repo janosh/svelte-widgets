@@ -126,7 +126,7 @@ Use `bind:open` to control the mobile menu. `children({ open, panel_id, routes }
 
 ## Breakpoint and styling
 
-`breakpoint` defaults to 767 pixels. Use `breakpoint={0}` for desktop navigation at every width or a larger threshold for the mobile layout. `dropdown_column_threshold` controls when desktop submenus use two columns.
+`breakpoint` defaults to 767 pixels. Use `breakpoint={0}` for desktop navigation at every width or a larger threshold for the mobile layout. Desktop submenus switch to two columns above `dropdown_column_threshold` items (default 10, counting child links and section headings).
 
 ```css
 nav {

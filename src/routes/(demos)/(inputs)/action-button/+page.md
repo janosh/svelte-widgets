@@ -1,14 +1,14 @@
 ## ActionButton
 
-Use `ActionButton` for save, retry, refresh, download or any other action worth reporting on. It runs a sync or async `action`, walks itself through `ready → pending → success | error`, blocks duplicate activation while pending, hands the result or the thrown error to callbacks and snippets, and returns to `ready` after `reset_ms`. Set `reset_ms={0}` to keep the terminal state until the next activation.
+For save, retry, refresh, download or any other action worth reporting on. `ActionButton` runs a sync or async `action`, moves through `ready → pending → success | error`, blocks duplicate activation while pending, hands the result or thrown error to callbacks and snippets, and returns to `ready` after `reset_ms` (default 2000). `reset_ms={0}` keeps the terminal state until the next activation.
 
-The button reserves the width of its widest label up front, so swapping `Save` for `Saving…` never nudges the layout around it.
+The button reserves the width of its widest label up front, so swapping `Save` for `Saving…` never shifts the layout.
 
 ### States and labels
 
-`labels` maps each of the four states to its text and `icons` maps them to a glyph; both are partial, so an omitted state keeps the `ACTION_BUTTON_LABELS` default. **Label text renders as text**, so markup in it shows up literally — pass an `icon` for a glyph, or take over rendering entirely with the `children` snippet.
+`labels` maps each of the four states to its text and `icons` to a glyph. Both are partial: a state missing from `labels` keeps its `ACTION_BUTTON_LABELS` default, one missing from `icons` shows no icon. **Labels render as text**, so markup in them shows literally: pass an icon for a glyph, or take over rendering with the `children` snippet.
 
-`bind:state` exposes the current state, and `on_success` / `on_error` receive the resolved value or the thrown error. The demo below fails every second run so you can watch the error path and the `reset_ms` countdown back to `ready`.
+`bind:state` (or `on_state_change`) exposes the current state, and `on_success` / `on_error` receive the resolved value or thrown error. The demo below fails every second run to show the error path and the `reset_ms` countdown back to `ready`.
 
 ```svelte example id="action-button-states"
 <script lang="ts">
@@ -53,7 +53,7 @@ The button reserves the width of its widest label up front, so swapping `Save` f
 
 ### Custom rendering
 
-The `children` snippet receives `{ state, icon, text, disabled, result, error }` and replaces the default icon-plus-text body, which is the way to render markup, a spinner or the result itself inside the button. `as` swaps the underlying element when a `<button>` will not do.
+The `children` snippet receives `{ state, icon, text, disabled, result, error }` and replaces the default icon-plus-text body, for markup, a spinner or the result itself. `as` swaps the underlying element when a `<button>` will not do.
 
 ```svelte example id="action-button-children"
 <script lang="ts">
@@ -80,7 +80,7 @@ The `children` snippet receives `{ state, icon, text, disabled, result, error }`
 
 ## CopyButton
 
-`CopyButton` composes `ActionButton` into a copy-to-clipboard control with bindable state, custom labels, success/error callbacks and configurable reset timing. This site mounts one in `global` mode on every code block.
+`CopyButton` wraps `ActionButton` into a copy-to-clipboard control with bindable state, custom labels, `on_copy_success`/`on_copy_error` callbacks and `reset_ms`. This site mounts one in `global` mode, which adds a button to every code block matching `global_selector` (default `pre > code`).
 
 ```svelte example id="copy-button"
 <script lang="ts">

@@ -1,6 +1,6 @@
 ## JsonTree
 
-Inspect objects with collapsible paths, search, copying and comparison highlights. The viewer accepts `unknown`, including primitive values, empty arrays and empty objects. Use [TreeView](tree-view) for a named hierarchy with selection and lazy loading.
+Inspect objects with collapsible paths, search, copying and comparison highlights. `value` is `unknown`: primitives, empty arrays and empty objects render too. Use [TreeView](tree-view) for a named hierarchy with selection and lazy loading.
 
 ### Minimal example
 
@@ -23,7 +23,7 @@ Search keys or values in the toolbar, expand a branch, or right-click a row to c
 
 ### Compact display
 
-Use `ui` to hide the toolbar, selected path, extra node actions, or byte-size hints independently. Omitted flags default to `true`; basic expand/collapse arrows, syntax highlighting, and copy shortcuts remain available.
+`ui` hides the toolbar, selected path, extra node actions or byte-size hints independently (omitted flags default to `true`). Expand/collapse arrows, syntax highlighting and copy shortcuts stay.
 
 ```svelte example id="json-tree-compact"
 <script lang="ts">
@@ -41,7 +41,7 @@ Use `ui` to hide the toolbar, selected path, extra node actions, or byte-size hi
 
 ### Edit and compare
 
-Editing is caller-owned: `on_change(path, new_value, old_value)` reports a proposed leaf change without mutating your data. The public `set_at_path` helper returns a new value with that path replaced. Pass the same `root_label` to the helper if you set one on the viewer. This example compares edits with a fixed original snapshot; Reset restores it.
+Editing is caller-owned: `on_change(path, new_value, old_value)` reports a proposed leaf change without mutating your data, and `set_at_path(value, path, new_value, root_label?)` returns a copy with that path replaced (pass the viewer's `root_label` if it has one). Below, edits are compared against the original snapshot, which Reset restores.
 
 ```svelte example id="json-tree-edit"
 <script lang="ts">
@@ -61,7 +61,7 @@ Editing is caller-owned: `on_change(path, new_value, old_value)` reports a propo
 />
 ```
 
-Double-click a leaf to edit; Enter commits and Escape cancels. Edits parse booleans, `null` and finite numbers, leaving other input as text. Validate changes in `on_change` before assigning them when your application requires a schema. `compare_value` marks additions, removals and changes; `highlight_changes` separately flashes values that change between renders.
+Double-click a leaf to edit; Enter commits and Escape cancels. Edits parse booleans, `null` and finite numbers, leaving other input as text. Validate against a schema in `on_change` before assigning. `compare_value` marks additions, removals and changes; `highlight_changes` (default `true`) separately flashes values that change between renders.
 
 ### Main API
 
@@ -76,7 +76,7 @@ Double-click a leaf to edit; Enter commits and Escape cancels. Edits parse boole
 | `on_select(path, value)`, `on_copy(path, text)`   | Observe node focus/selection and successful copies.                                                                                           |
 | `editable`, `on_change`, `compare_value`          | Caller-owned editing and comparison, as above.                                                                                                |
 
-Use CSS properties such as `--jt-max-height`, `--jt-font-size`, `--jt-indent` and `--jt-bg` on the component to fit a panel. Fetching, loading indicators and request errors belong to the caller: render those before mounting the viewer, rather than using `null` as a loading sentinel. Clipboard failures produce a visible “Copy failed” message.
+CSS properties such as `--jt-max-height`, `--jt-font-size`, `--jt-indent` and `--jt-bg` fit it to a panel. Fetching, loading and request errors belong to the caller: render those before mounting the viewer rather than passing `null` as a loading sentinel. Copies confirm, or report “Copy failed”, in a `.copy-toast` beside the row.
 
 ### Keyboard behavior
 

@@ -219,8 +219,8 @@ type InputSnippetProps<T extends Option = Option> = Pick<
 > & { selected: T[]; placeholder: string | null }
 type UserMsgProps = {
   search_text: string
-  msg_type: false | `dupe` | `create` | `no-match`
-  msg: null | string
+  msg_type: `dupe` | `create` | `no-match`
+  msg: string
 }
 export type GroupHeaderProps<T extends Option = Option> = {
   group: string

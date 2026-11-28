@@ -1,10 +1,10 @@
 ## SplitPane
 
-Resize two adjacent panes with a pointer or keyboard. SplitPane renders the separator; your markup owns the panes and uses the `--split-pane-size` CSS property that it writes on their shared parent.
+Resize two adjacent panes with a pointer or keyboard. SplitPane renders the separator and writes `--split-pane-size` on the panes' shared parent; your markup owns the panes.
 
 ### Minimal example
 
-The parent needs `position: relative`. Give the first pane a width of `var(--split-pane-size)` and let the second fill the remaining space. Keep `min-width: 0` on pane content so long text cannot force a larger layout.
+The parent needs `position: relative`. Give the first pane a width of `var(--split-pane-size)` and let the second fill the remaining space. Keep `min-width: 0` on the panes so long text can't widen the layout.
 
 ```svelte example id="split-pane-basic"
 <script lang="ts">
@@ -43,7 +43,7 @@ The parent needs `position: relative`. Give the first pane a width of `var(--spl
 
 ### Fixed-size sidebar
 
-Set `first_px` to use pixels instead of a ratio. Its width remains stable when the container grows; `min_px`, `max_px` and `second_min_px` constrain resizing. Ratio limits do not apply in pixel mode.
+Set `first_px` to size in pixels instead of a ratio, so the width holds as the container grows. `min_px`, `max_px` and `second_min_px` constrain it; ratio limits don't apply.
 
 ```svelte example id="split-pane-pixels"
 <script lang="ts">
@@ -78,7 +78,7 @@ Set `first_px` to use pixels instead of a ratio. Its width remains stable when t
 
 ### Keyboard behavior
 
-Tab focuses the divider. Left/Right resize side-by-side panes; Up/Down resize stacked panes. Each press changes the size by 5% of the container. Home/End reach the effective bounds, and Enter collapses or restores when enabled. Horizontal keys follow the page's text direction. Render loading, empty or error feedback inside either pane; SplitPane only owns their size.
+Tab focuses the divider. Left/Right resize side-by-side panes, Up/Down stacked ones, by 5% of the container per press. Home/End reach the effective bounds, and Enter collapses or restores when enabled. Horizontal keys follow the page's text direction. SplitPane only owns pane size: render loading, empty or error states inside the panes.
 
 ## DockedSidebar
 

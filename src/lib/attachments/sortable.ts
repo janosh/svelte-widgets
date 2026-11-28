@@ -47,23 +47,16 @@ const header_controls = `a, button, input, select, textarea, label, [contentedit
 
 export interface SortableOptions {
   header_selector?: string
-  asc_class?: string
-  desc_class?: string
-  sorted_style?: Partial<CSSStyleDeclaration>
   disabled?: boolean
 }
 
-// sorts a table by clicking column headers; clicking again flips direction
+// Sorts a table by clicking column headers; clicking again flips direction. The sorted header
+// gets aria-sort (style its direction with th[aria-sort='ascending'|'descending']) and a
+// background from --sortable-sorted-bg.
 export const sortable =
   (options: SortableOptions = {}) =>
   (node: HTMLElement) => {
-    const {
-      header_selector = `thead th`,
-      asc_class = `table-sort-asc`,
-      desc_class = `table-sort-desc`,
-      sorted_style = { backgroundColor: `rgba(255, 255, 255, 0.1)` },
-      disabled = false,
-    } = options
+    const { header_selector = `thead th`, disabled = false } = options
 
     if (disabled) return undefined
 
@@ -85,7 +78,6 @@ export const sortable =
       const { header, original_style } = state
       state.arrow?.remove()
       state.arrow = undefined
-      header.classList.remove(asc_class, desc_class)
       if (original_style) header.setAttribute(`style`, original_style)
       else header.removeAttribute(`style`)
       header.removeAttribute(`aria-sort`)
@@ -120,9 +112,8 @@ export const sortable =
         }
         sort_dir = column === sort_col_idx ? -sort_dir : 1
         sort_col_idx = column
-        header.classList.add(sort_dir > 0 ? asc_class : desc_class)
         header.setAttribute(`aria-sort`, sort_dir > 0 ? `ascending` : `descending`)
-        Object.assign(header.style, sorted_style)
+        header.style.backgroundColor = `var(--sortable-sorted-bg, rgba(255, 255, 255, 0.1))`
         state.arrow = header.ownerDocument.createElement(`span`)
         state.arrow.className = `sort-arrow`
         state.arrow.textContent = ` ${sort_dir > 0 ? `↑` : `↓`}`

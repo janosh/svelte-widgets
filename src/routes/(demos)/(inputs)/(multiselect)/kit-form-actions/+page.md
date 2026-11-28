@@ -1,8 +1,8 @@
 ## Hook up Multiselect to SvelteKit form action incl. form validation
 
-This example shows the SvelteKit form action way of handling MultiSelect fields in form submission events. If you're not interested in [progressively enhanced forms](https://svelte.dev/docs/kit/form-actions#progressive-enhancement) (i.e. supporting no-JS browsers) take a look at the [JS form example](form) instead.
+Handling MultiSelect fields with a SvelteKit form action. If you don't need [progressively enhanced forms](https://svelte.dev/docs/kit/form-actions#progressive-enhancement) (i.e. no-JS support), see the [JS form example](form) instead.
 
-> This example only works when running the dev server locally because it needs a server to respond to the form's POST request and this documentation site is only static HTML.
+> This example only works on a local dev server: the form's POST request needs a server, and this documentation site is static HTML.
 
 ```svelte example id="multiselect-kit-form-action"
 <script lang="ts">
@@ -95,9 +95,7 @@ This example shows the SvelteKit form action way of handling MultiSelect fields 
 
 ### +page.server.ts
 
-The above code needs to be in a `+page.svelte` file with the following `+page.server.ts` file in the same directory next to it.
-
-`export const actions` is what your own app wants. This site exports `_actions` so its static build skips it; rename it back to run the demo locally.
+Put the code above in a `+page.svelte` next to this `+page.server.ts`. Your own app exports `actions`; this site exports `_actions` so its static build skips it, so rename it to run the demo locally.
 
 ```ts
 import { fail } from '@sveltejs/kit'

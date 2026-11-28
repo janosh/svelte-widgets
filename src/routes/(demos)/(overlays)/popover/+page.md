@@ -1,10 +1,10 @@
 ## Popover & ActionMenu
 
-Both surfaces use the browser Popover API for top-layer rendering, light dismissal and Escape handling, with [`float`](attachments/float) providing placement. A non-native dismissal policy opts into [`click_outside`](attachments/click-outside). `Popover` can add [`focus_trap`](attachments/focus-trap) for dialog-like content; `ActionMenu` uses menu-specific arrow keys and lets Tab resume the page order.
+Both use the browser Popover API for top-layer rendering, light dismissal and Escape, with [`float`](attachments/float) for placement. A non-native dismissal policy switches to [`click_outside`](attachments/click-outside). `Popover` adds [`focus_trap`](attachments/focus-trap) for dialog-like content; `ActionMenu` uses menu arrow keys and lets Tab resume the page order.
 
 ### `Popover`
 
-The `trigger` snippet receives the click handler and `aria-expanded`/`aria-haspopup`/`aria-controls` attributes to spread onto whatever opens the popover. The browser closes the auto popover on an outside click or Escape and preserves nested-popover ordering.
+The `trigger` snippet receives the event handlers and `aria-expanded`/`aria-haspopup`/`aria-controls` to spread onto whatever opens the popover. The browser closes the auto popover on an outside click or Escape and keeps nested popovers in order.
 
 ```svelte example id="popover-basic"
 <script lang="ts">
@@ -55,11 +55,11 @@ The `trigger` snippet receives the click handler and `aria-expanded`/`aria-haspo
 </div>
 ```
 
-`on_open` and `on_close` report each change once with its cause: `trigger` (a click, or a hover/focus enter or leave), `pointer`, `escape`, or `programmatic` for a change to the bound `open`. Mounting reports nothing.
+`on_open({ via })` and `on_close({ via })` report each change once with its cause: `trigger` (a click, or a hover/focus enter or leave), `pointer` and `escape` (close only), or `programmatic` for a change to the bound `open`. Mounting reports nothing.
 
-`escape={false}` switches to a manual popover so Escape remains with the page, `dismiss_on="press"` opts into press-time custom dismissal, and `trap_focus={false}` leaves focus where it is. `strategy="absolute"` survives a transformed ancestor at the cost of tracking page scroll, and `match_width` sizes the surface to the trigger for dropdown-like menus. Set `role` to `listbox`, `tree` or `grid` when appropriate; the trigger mirrors it in `aria-haspopup` and only sets `aria-controls` while the surface is mounted. Use `ActionMenu` rather than `role="menu"` when you need complete ARIA menu keyboard behavior.
+`escape={false}` makes it a manual popover so Escape stays with the page, `dismiss_on="press"` dismisses on press instead of release, and `trap_focus={false}` leaves focus where it is. `strategy="absolute"` (default `fixed`) survives a transformed ancestor at the cost of tracking page scroll, and `match_width` sizes the surface to the trigger for dropdown-like menus. `role` defaults to `dialog`; set `listbox`, `tree` or `grid` when appropriate. The trigger mirrors it in `aria-haspopup` and sets `aria-controls` only while the surface is mounted. Use `ActionMenu` rather than `role="menu"` for full ARIA menu keyboard behavior.
 
-Use `trigger_mode="hover"` or `trigger_mode="focus"` for non-click interactions. Hover mode also opens on focus, and `open_delay_ms`/`close_delay_ms` keep the surface stable while the pointer crosses from its trigger. Non-click modes default to a 150 ms close delay.
+`trigger_mode="hover"` or `"focus"` replaces clicks. Hover mode also opens on focus, and `open_delay_ms` (default 0) and `close_delay_ms` (default 150) keep the surface stable while the pointer crosses from its trigger.
 
 ```svelte example id="popover-hover"
 <script lang="ts">
@@ -76,7 +76,7 @@ Use `trigger_mode="hover"` or `trigger_mode="focus"` for non-click interactions.
 
 ### `ActionMenu`
 
-Render a `trigger` snippet for a button-anchored dropdown, or pass a region as children to replace its browser right-click menu. Actions use the same [`CmdAction`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/types.ts) shape as `CommandMenu`. Every action needs a nonempty string `id`, unique across the entire menu, including sections. Numeric, empty, whitespace-only, and duplicate IDs are rejected. Labels and section titles may repeat; preserve section objects when reordering them to retain their rendered nodes. A radio section's `selected` value is an action ID or `null`.
+Render a `trigger` snippet for a button-anchored dropdown, or pass a region as children to replace its browser right-click menu. Actions use the same [`CmdAction`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/types.ts) shape as `CommandMenu`. Every action needs a non-empty string `id`, unique across the whole menu including sections; numeric, blank and duplicate IDs throw. Labels and section titles may repeat. Keep section objects stable when reordering so their rendered nodes are retained. A radio section's `selected` is an action ID or `null`.
 
 ```svelte example id="action-menu-basic"
 <script lang="ts">
@@ -113,8 +113,8 @@ Render a `trigger` snippet for a button-anchored dropdown, or pass a region as c
 </ol>
 ```
 
-Use `on_execute={({ action, section }) => ...}` to observe completed action invocation, matching CommandMenu’s `on_execute({ action })`. The `item` snippet and callback preserve your custom action fields. Import `CmdSection<Action>` from the package root for typed sections. `on_open({ via })` (`trigger`, `contextmenu`, `programmatic`) and `on_close({ via })` (`trigger`, `escape`, `pointer`, `select`, `tab`, `programmatic`) report each change of `open`, or of `at` in context mode, once; mounting reports nothing.
+`on_execute({ action, section })` fires after an action runs, like CommandMenu's `on_execute({ action })`. It and the `item` snippet (which renders rows your own way) keep your custom action fields; import `CmdSection<Action>` from the package root for typed sections. `on_open({ via })` (`trigger`, `contextmenu`, `programmatic`) and `on_close({ via })` (`trigger`, `escape`, `pointer`, `select`, `tab`, `programmatic`) report each change of `open`, or of `at` in context mode, once; mounting reports nothing.
 
-Both forms share the same menu semantics: Arrow keys walk the items (skipping disabled ones and wrapping at both ends), Home and End jump to either end, Tab/Shift+Tab close and continue after/before the trigger, and the browser closes on Escape or an outside interaction. The trigger form supports `bind:open`, `placement`, `align`, `offset`, `padding`, `match_width` and `strategy`.
+Both forms share the menu semantics: arrow keys walk the items (skipping disabled ones, wrapping at both ends), Home and End jump to either end, Tab/Shift+Tab close and continue after/before the trigger, and the browser closes on Escape or an outside interaction. The trigger form supports `bind:open`, `placement`, `align`, `offset`, `padding`, `match_width` and `strategy`.
 
-In context mode, drop the region and the whole page qualifies; `trigger="none"` installs no right-click handler, so you can bind `at` and open from a long-press or keyboard shortcut. The default `dismiss` policy uses native light dismissal; `dismiss_on: 'press'`, `escape: false`, `disabled: true`, `inside`, or `scope` selects the custom [`click_outside`](attachments/click-outside) path. An `item` snippet renders rows your own way.
+In context mode without a region, the whole page qualifies; `trigger="none"` installs no right-click handler, so you can bind `at` and open from a long-press or keyboard shortcut. The default `dismiss` policy uses native light dismissal; `dismiss_on: 'press'`, `escape: false`, `disabled: true`, `inside` or `scope` selects the custom [`click_outside`](attachments/click-outside) path.

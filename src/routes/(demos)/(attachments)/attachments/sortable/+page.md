@@ -1,5 +1,7 @@
 ## `sortable`
 
+Click a header to sort its column, again to flip the direction. The sorted header gets `aria-sort`, so style its direction with `th[aria-sort='ascending']` and `th[aria-sort='descending']`, and its background with `--sortable-sorted-bg`.
+
 ```svelte example id="attachments-sortable"
 <script lang="ts">
   import { sortable } from 'svelte-widgets/attachments'

@@ -136,29 +136,30 @@ describe(`sortable`, () => {
 
     click(header)
     expect(column_values(table)).toEqual([`Mars`, `Earth`, `Jupiter`]) // unsorted
-    expect(header.classList.contains(`table-sort-asc`)).toBe(false)
+    expect(header.hasAttribute(`aria-sort`)).toBe(false)
   })
 
-  it(`applies custom classes and sorted_style, resetting other columns`, () => {
+  // direction is styled through aria-sort, the highlight through --sortable-sorted-bg
+  it(`marks the sorted header, resetting other columns`, () => {
     const table = create_table()
-    attach_sortable(table, {
-      asc_class: `asc`,
-      desc_class: `desc`,
-      sorted_style: { backgroundColor: `red` },
-    })
+    attach_sortable(table)
     const [h1, h2] = headers_of(table)
+    const sorted_bg = `var(--sortable-sorted-bg, rgba(255, 255, 255, 0.1))`
+    const state = (header: HTMLElement) => [
+      header.getAttribute(`aria-sort`),
+      header.style.backgroundColor,
+    ]
 
     click(h1)
-    expect([h1.className, h1.style.backgroundColor]).toEqual([`asc`, `red`])
+    expect(state(h1)).toEqual([`ascending`, sorted_bg])
     click(h1)
-    expect(h1.className).toBe(`desc`)
+    expect(state(h1)).toEqual([`descending`, sorted_bg])
 
     click(h2)
     expect(h1.textContent).not.toContain(`↑`)
-    expect(h1.className).toBe(``)
-    expect(h1.style.backgroundColor).toBe(``) // sorted_style reset too, not just the class
+    expect(state(h1)).toEqual([null, ``]) // the highlight resets too, not just aria-sort
     expect(h1.style.cursor).toBe(`pointer`) // reset must not strip the pointer cursor
-    expect([h2.className, h2.style.backgroundColor]).toEqual([`asc`, `red`])
+    expect(state(h2)).toEqual([`ascending`, sorted_bg])
   })
 
   it(`handles an empty table body and a custom header_selector`, () => {
@@ -174,7 +175,7 @@ describe(`sortable`, () => {
     ])
     click(sortable_header)
     expect(sortable_header.textContent).toBe(`A ↑`)
-    expect(sortable_header.classList.contains(`table-sort-asc`)).toBe(true)
+    expect(sortable_header.getAttribute(`aria-sort`)).toBe(`ascending`)
   })
 
   const one_column = (...cells: string[]) =>

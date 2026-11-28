@@ -1,6 +1,6 @@
 ## Tabs
 
-`Tabs` keeps selection bindable and supports automatic or manual keyboard activation. It intentionally ships no visual chrome; style `.tabs-list`, `.tabs-tab`, `.tabs-panel` and their `data-state` attributes.
+`Tabs` binds the selected `value` and supports `automatic` or `manual` keyboard `activation`. It ships no visual chrome: style `.tabs-list`, `.tabs-tab`, `.tabs-panel` and their `data-state` attributes.
 
 ```svelte example id="patterns-tabs"
 <script lang="ts">
@@ -23,7 +23,7 @@
 
 ## Accordion
 
-`Accordion` uses real heading buttons and regions. Set `mode="multiple"` to bind an array of open values, or set `collapsible={false}` in single mode to keep the open item from closing itself. It is also headless: `.accordion-item`, `.accordion-trigger`, `.accordion-panel` and `data-state` are the styling hooks.
+`Accordion` uses real heading buttons and regions. `mode="multiple"` binds an array of open values; in single mode `collapsible={false}` keeps the open item from closing itself. It is also headless: `.accordion-item`, `.accordion-trigger`, `.accordion-panel` and `data-state` are the styling hooks.
 
 ```svelte example id="patterns-accordion"
 <script lang="ts">
@@ -46,7 +46,7 @@
 
 ## FindBar
 
-`FindBar` is an in-DOM find-in-page bar over `search_text`: it highlights every match under `root`, counts them, and walks them with Enter / Shift+Enter. Matches wear a CSS Custom Highlight, which is document-global and so cannot be styled from inside the component — add your own `::highlight(find-match)` rule. Where the chrome does not fit, `create_find_state` from `svelte-widgets/find-in-page` gives you the same cursor with no markup.
+`FindBar` is an in-DOM find-in-page bar over `search_text`: it highlights every match under `root`, counts them, and walks them with Enter / Shift+Enter. Escape closes it, and `on_close` receives `{ via: 'close' | 'escape' }`. Matches wear a CSS Custom Highlight, which is document-global and can't be styled from inside the component, so add your own `::highlight(find-match)` rule. For custom chrome, `create_find_state` from `svelte-widgets/find-in-page` gives the same cursor with no markup.
 
 The bar can sit inside `root`, as here: its own status text and controls are never searched.
 
@@ -83,7 +83,7 @@ The bar can sit inside `root`, as here: its own status text and controls are nev
 
 ## Dialog
 
-`Dialog` is a centered native modal with bindable state and surface, composable trigger/header/footer snippets, focus restoration and nested-dialog stacking. `on_open` reports `trigger` or `programmatic` and `on_close` reports `pointer`, `escape`, `close` or `programmatic`: each change fires once, setting the bound `open` yourself reports `programmatic`, and mounting reports nothing. Use `closedby="any"` (the default) for backdrop and Escape dismissal, `closedby="closerequest"` for Escape only, or `closedby="none"` to require an explicit close action. Keep nested dialogs and other overlays inside its content so the browser's modal top layer can make only the innermost one interactive.
+`Dialog` is a centered native modal with bindable state and surface, composable trigger/header/footer snippets, focus restoration and nested-dialog stacking. `on_open` reports `{ via }` of `trigger` or `programmatic`, and `on_close` one of `pointer`, `escape`, `close` or `programmatic` (setting the bound `open` yourself); each change fires once and mounting reports nothing. Use `closedby="any"` (the default) for backdrop and Escape dismissal, `closedby="closerequest"` for Escape only, or `closedby="none"` to require an explicit close action. Keep nested dialogs and other overlays inside its content so the browser's modal top layer can make only the innermost one interactive.
 
 ```svelte example id="patterns-dialog"
 <script lang="ts">

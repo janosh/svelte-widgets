@@ -57,4 +57,4 @@
 </style>
 ```
 
-Use `css_class` to select a custom `::highlight()` rule, `duration_ms` to remove matches automatically, and `on_highlight` for optional range-based effects. `scroll_to_match` scrolls the first match smoothly into view by default; set it to `false` to keep the viewport fixed or pass custom `ScrollIntoViewOptions`. `on_highlight` still receives ranges without the CSS Highlight API and reruns when observed content changes.
+Matching folds case, Unicode normalization and whitespace and spans inline markup; `fuzzy: true` highlights a subsequence match character by character instead. `css_class` (default `highlight-match`) names the `::highlight()` rule, `duration_ms` removes matches after a delay, and `scroll_to_match` scrolls the first match smoothly to the center by default (`false` keeps the viewport fixed, or pass your own `ScrollIntoViewOptions`). `on_highlight({ node, ranges })` runs after every pass, also without the CSS Highlight API. Highlights rerun when the subtree changes; `observe_mutations: false` freezes what the DOM held on attach, and `{ debounce_ms, max_wait_ms }` coalesces bursts.

@@ -32,9 +32,9 @@
 </p>
 ```
 
-Each inner element takes an `*_props` object of HTML attributes (`class`, `style`, `data-*`, `title`, ...), handy for CSS frameworks like Tailwind. `class` merges with the component's own classes (e.g. `active` on the hovered or arrow-keyed option), and `li_option_props.style` / `li_selected_props.style` merge after each option's own `style` field. Event handlers are not accepted: the component's own listeners own those elements.
+Each inner element takes an `*_props` object of HTML attributes (`class`, `style`, `data-*`, `title`, ...), handy for CSS frameworks like Tailwind. `class` merges with the component's own classes (e.g. `active` on the hovered or arrow-keyed option), and `li_option_props.style` / `li_selected_props.style` merge after each option's own `style` field. Event handlers are not accepted, since the component's own listeners own those elements. To style the active state, pass `li_active_option_class` and `li_active_user_msg_class`.
 
-This simplified DOM structure of the component shows where these props land:
+Where these props land:
 
 ```svelte
 <div class="multiselect {class}">

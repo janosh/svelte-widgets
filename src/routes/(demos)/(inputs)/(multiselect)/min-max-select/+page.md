@@ -1,6 +1,6 @@
 ## Min/max number of selected options
 
-`max_select={5}` prevents users from selecting more than 5 options.
+`max_select={5}` caps the selection at 5 options and `min_select={1}` hides the remove button on the last one.
 
 ```svelte example id="languages"
 <script lang="ts">
@@ -42,12 +42,9 @@
 </p>
 ```
 
-When setting an integer value for `max_select` Multiselect will
+Reaching `max_select` closes the dropdown and blocks further selections (firing `on_max_reached` on each attempt).
 
-- close options dropdown when reaching `max_select` items
-- prevent users from selecting more options after reaching `max_select` items
-
-`required={3}` means users have to pick at least 3 options before they can submit a form.
+`required={3}` blocks form submission until at least 3 options are picked.
 
 ```svelte example id="required-three"
 <script lang="ts">
@@ -71,7 +68,7 @@ When setting an integer value for `max_select` Multiselect will
 </form>
 ```
 
-`max_select={n}` and `required={m}` can be combined when `n >= m`.
+`max_select={n}` and `required={m}` can be combined when `n >= m` (otherwise MultiSelect throws).
 
 ```svelte example id="max-select-with-required"
 <script lang="ts">
@@ -97,7 +94,7 @@ When setting an integer value for `max_select` Multiselect will
 
 ## Select All Option
 
-Use `select_all_option` to add a "Select all" button at the top of the dropdown. It respects `max_select` (only selects up to the limit) and skips disabled options. Optionally set `shortcuts={{ select_all: 'ctrl+a' }}` to enable the keyboard shortcut (disabled by default to avoid hijacking the browser's native Ctrl+A).
+`select_all_option` adds a "Select all" row at the top of the dropdown. It selects up to `max_select` and skips disabled options. `shortcuts={{ select_all: 'ctrl+a' }}` adds a keyboard shortcut (off by default to leave the browser's native Ctrl+A alone).
 
 ```svelte example id="select-all-option-demo"
 <script lang="ts">
@@ -159,7 +156,7 @@ Pass a string to customize the label:
 
 ## Initialize with `value` prop
 
-Use `mode="single"` with a scalar `value` to initialize single selection. Strings, numbers, and objects are supported.
+In `mode="single"`, `value` is one option (string, number or object) or `null`.
 
 ```svelte example id="single-select-bind-value"
 <script lang="ts">

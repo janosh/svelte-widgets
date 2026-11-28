@@ -1,6 +1,6 @@
 ## Keep Selected in Dropdown
 
-Configure how selected options behave in the dropdown. Try different modes:
+`keep_selected_in_dropdown` controls whether selected options stay in the dropdown:
 
 ```svelte example id="keep-selected-interactive"
 <script lang="ts">

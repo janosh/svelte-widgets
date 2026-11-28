@@ -1,6 +1,6 @@
 ## Page-Reload Persistent MultiSelect
 
-This example shows how to combine MultiSelect with `sessionStorage` to persist the `selected` state across page reloads.
+Persists the bound `value` in `sessionStorage` across page reloads.
 
 ```svelte example id="languages"
 <script lang="ts">
@@ -54,7 +54,7 @@ This example shows how to combine MultiSelect with `sessionStorage` to persist t
 
 ## Array Cloning Infinite Loop Prevention ([#309](https://github.com/janosh/svelte-widgets/issues/309))
 
-Tests that binding to reactive wrappers (Svelte stores, Superforms, etc.) that clone arrays on assignment doesn't cause infinite loops.
+Binding to reactive wrappers that clone arrays on assignment (Svelte stores, Superforms, etc.) must not cause infinite loops.
 
 ```svelte example id="store-binding"
 <script lang="ts">

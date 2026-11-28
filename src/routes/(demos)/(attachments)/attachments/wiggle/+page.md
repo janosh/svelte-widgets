@@ -2,7 +2,7 @@
 
 Shakes an element once to draw attention to a change, such as a rejected input. `create_wiggle(options)` returns a controller: attach it with `{@attach shake.attach}` (to as many elements as you like) and call `shake.trigger()` to wiggle them all. The motion is a spring toward a peak `angle`, `scale`, `dx` or `dy` for `duration_ms`, then back to rest, tuned by `stiffness` and `damping` as in `svelte/motion`'s `Spring`. It plays through the Web Animations API, so the element's own `transform` returns afterwards, and a re-trigger mid-wiggle keeps its momentum. Options are read on every trigger, so a `$state` object retunes it live. Users who prefer reduced motion see no wiggle. Transforms skip inline elements: attach to an `inline-block` or block element.
 
-Pick what triggers it and drag the sliders to tune the motion. The snippet below them shows the options you picked.
+Pick a trigger and tune the motion with the sliders; the snippet below shows the options you changed.
 
 ```svelte example id="attachments-wiggle"
 <script lang="ts">

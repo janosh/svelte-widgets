@@ -1,14 +1,14 @@
 ## Fullscreen
 
-`FullscreenButton` and the headless `sync_fullscreen` keep a bindable `fullscreen` flag and the browser's fullscreen state in agreement. The flag is the single source of truth: click the button, flip the flag yourself, or press <kbd>Esc</kbd> — all three end up in the same place.
+`FullscreenButton` and the headless `sync_fullscreen` keep a bindable `fullscreen` flag and the browser's fullscreen state in agreement. The flag is the single source of truth: clicking the button, setting the flag and pressing <kbd>Esc</kbd> all end in the same state.
 
-The important part is that the sync is **keyed to one wrapper element**. Two viewers on a page each own their own flag, so sending one fullscreen leaves the other's flag alone. Read the flag off `document.fullscreenElement` alone and you get the opposite: every flag flips, and every flipped flag fires its own `requestFullscreen`.
+The sync is **keyed to one wrapper element**: sending one of two viewers fullscreen leaves the other's flag alone. A flag read off `document.fullscreenElement` alone would flip on every viewer, and each flipped flag would fire its own `requestFullscreen`.
 
 A fullscreened element inherits nothing from the page and would otherwise render on black, so entering fullscreen also paints the page background onto a CSS variable (`--fullscreen-bg` by default, renameable via `bg_css_var`).
 
 ### Two independent wrappers
 
-Send one panel fullscreen and watch the other panel's flag stay `false`.
+Send one panel fullscreen; the other's flag stays `false`.
 
 ```svelte example id="fullscreen-isolation"
 <script lang="ts">
@@ -64,7 +64,7 @@ Send one panel fullscreen and watch the other panel's flag stay `false`.
 
 `bind:fullscreen` is two-way, so a checkbox, a hotkey or a `$effect` can enter and leave fullscreen without touching the button. Omit `wrapper` and the button becomes a plain toggle for the flag, for consumers that call the Fullscreen API themselves (`on_change` then stays silent: there is no wrapper to transition). A request the browser rejects flips the flag back, so it always ends up matching the browser.
 
-`hotkey="F"` adds a plain-key shortcut: it toggles fullscreen while the pointer is over `wrapper` or focus is inside it (so of several viewers only the hovered one reacts), names the key in the button's `title` and `aria-keyshortcuts`, and flashes the button. Chords such as <kbd>Cmd/Ctrl</kbd>+<kbd>F</kbd> stay the browser's, typing in a field is left alone, a hidden button takes no key, and a wrapper nested inside another with the same hotkey leaves the key to the outer one. A chord or several keys throw, since the key would never fire.
+`hotkey="F"` adds a plain-key shortcut: it toggles fullscreen while the pointer is over `wrapper` or focus is inside it (so of several viewers only the hovered one reacts), names the key in the button's `title` and `aria-keyshortcuts`, and flashes the button. Chords such as <kbd>Cmd/Ctrl</kbd>+<kbd>F</kbd> stay the browser's, typing in a field is left alone, a hidden button takes no key, and a wrapper nested inside another with the same hotkey leaves the key to the outer one unless the inner one is in fullscreen. A chord or several keys throw, since the key would never fire.
 
 ```svelte example id="fullscreen-bound"
 <script lang="ts">
@@ -115,7 +115,7 @@ Send one panel fullscreen and watch the other panel's flag stay `false`.
 
 ### `sync_fullscreen`
 
-The button is a thin wrapper over `sync_fullscreen`, which any component can call during init to get the same two-way sync without the button's markup:
+The button is a thin wrapper over `sync_fullscreen` (from `svelte-widgets/browser`), which any component can call during init for the same two-way sync without the button:
 
 ```ts
 sync_fullscreen({

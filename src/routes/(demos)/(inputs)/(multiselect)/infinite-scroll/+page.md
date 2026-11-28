@@ -1,10 +1,10 @@
 ## Dynamic Options Loading
 
-For large datasets or server-side data, use `load_options` to dynamically load options as the user scrolls and searches. The component handles all state management, debouncing, and pagination automatically. Requested in [GitHub discussion #342](https://github.com/janosh/svelte-widgets/discussions/342).
+For large or server-side datasets, `load_options` loads options as the user scrolls and searches. Requested in [janosh/svelte-widgets#342](https://github.com/janosh/svelte-widgets/discussions/342).
 
 ### Basic Example
 
-This runnable example filters an in-memory dataset with a simulated network delay. Enable **Fail the next request**, then search to try the built-in Retry button. Search for `no match` to see the empty-results state.
+Filters an in-memory dataset with a simulated network delay. Enable **Fail the next request**, then search to try the built-in Retry button. Search for `no match` to see the empty-results state.
 
 ```svelte example id="load-basic"
 <script lang="ts">
@@ -42,17 +42,17 @@ This runnable example filters an in-memory dataset with a simulated network dela
 <MultiSelect {load_options} placeholder="Search 10,000 items..." />
 ```
 
-The component handles the required state management:
+The component handles:
 
-- Loading initial options when dropdown opens
-- Loading more as user scrolls
-- Debounced search with automatic reset
-- Canceling superseded requests through `signal`
-- Loading indicators and a Retry button after failures; previously loaded options remain available
+- loading initial options when the dropdown opens
+- loading more as the user scrolls
+- debounced search that restarts pagination
+- canceling superseded requests through `signal`
+- loading indicators, and a Retry button after failures that keeps previously loaded options
 
 ### Simulated User API
 
-This runnable example searches an in-memory user list; it does not contact a server. Use the REST recipe below to connect your own backend:
+Searches an in-memory user list without contacting a server. The REST recipe below connects a real backend:
 
 ```svelte example id="load-api"
 <script lang="ts">
@@ -108,7 +108,7 @@ This runnable example searches an in-memory user list; it does not contact a ser
 
 ### REST API Recipe
 
-This complete component expects your endpoint to return `{ items: string[], total: number }`. Adapt the endpoint and response type to your API. HTTP failures must throw: `fetch` resolves normally for responses such as 404 or 500.
+Expects your endpoint to return `{ items: string[], total: number }`; adapt both to your API. HTTP failures must throw, since `fetch` resolves normally for responses such as 404 or 500.
 
 ```svelte
 <script lang="ts">
@@ -139,11 +139,11 @@ This complete component expects your endpoint to return `{ items: string[], tota
 <MultiSelect {load_options} placeholder="Search remote items..." />
 ```
 
-`URLSearchParams` preserves punctuation such as `&` and `#` within the search term. Forward `signal` so a new search, closing the dropdown, or unmounting cancels the old fetch. Let errors propagate so the component can show Retry; returning an empty array from a catch would hide the failure. A successful empty response is `{ items: [], total: 0 }` and shows the normal no-matches message without Retry.
+`URLSearchParams` escapes punctuation such as `&` and `#` in the search term. Forward `signal` so a new search, closing the dropdown, or unmounting cancels the old fetch. Let errors propagate so the component can show Retry; returning an empty array from a catch would hide the failure. A successful `{ items: [], total: 0 }` shows the normal no-matches message without Retry.
 
 ### Configuration Options
 
-For advanced control, pass an object with `fetch` function and config:
+Pass an object with `fetch` and config for finer control:
 
 ```svelte example id="load-config"
 <script lang="ts">
@@ -177,8 +177,6 @@ For advanced control, pass an object with `fetch` function and config:
 ```
 
 ### Object Options with Custom Display
-
-Use object options with custom snippets:
 
 ```svelte example id="load-objects"
 <script lang="ts">

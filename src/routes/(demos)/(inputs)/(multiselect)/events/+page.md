@@ -1,6 +1,6 @@
 ## MultiSelect Events
 
-This demo logs common selection, dropdown, search, activation, and native input events.
+Logs selection, dropdown, search, activation and native input events.
 
 ```svelte example id="multiselect-events-demo"
 <script lang="ts">
@@ -44,7 +44,8 @@ This demo logs common selection, dropdown, search, activation, and native input 
   <section class="demo-section">
     Select options, remove them, use "Remove all", create custom options, navigate with
     arrow keys, and interact with the input. Try selecting 5 options and adding a 6th to
-    trigger `on_max_reached`, or selecting the same option twice to see `on_duplicate`.
+    trigger `on_max_reached`, or type an already selected color and press Enter to see
+    `on_duplicate`.
 
     <label style="display: block; margin-block: 1em">
       <input type="checkbox" bind:checked={allow_user_options} />
@@ -185,7 +186,7 @@ This demo logs common selection, dropdown, search, activation, and native input 
 
 ### Covered Event Reference
 
-The tables below list only the events wired up in the demo above. `MultiSelect` also emits `on_select_all`, `on_range_select`, `on_reorder`, `on_group_toggle`, `on_collapse_all`, `on_expand_all`, and `on_parsed_paste` — see [`MultiSelectEvents`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/types.ts) for their payloads.
+The tables list only the events wired up above. `MultiSelect` also emits `on_select_all`, `on_range_select`, `on_reorder`, `on_group_toggle`, `on_collapse_all`, `on_expand_all`, and `on_parsed_paste` — see [`MultiSelectEvents`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/types.ts) for their payloads.
 
 #### Custom Events
 
@@ -200,7 +201,7 @@ The tables below list only the events wired up in the demo above. `MultiSelect` 
 | `on_close`       | Fired when dropdown closes                       | `{ via: MultiSelectCloseVia }`                                                                                          |
 | `on_search`      | Fired (debounced 150ms) when search text changes | `{ search_text: string, matching_options: T[] }`                                                                        |
 | `on_max_reached` | Fired when user tries to exceed max_select       | `{ selected: T[], max_select: number, attempted_option: T }`                                                            |
-| `on_duplicate`   | Fired when user tries to add duplicate           | `{ option: T }`                                                                                                         |
+| `on_duplicate`   | Fired when user tries to add a duplicate         | `{ option: T }`                                                                                                         |
 | `on_activate`    | Fired on keyboard navigation through options     | `{ option: T \| null, index: number \| null }`                                                                          |
 
 #### Native DOM Events
@@ -214,11 +215,11 @@ The tables below list only the events wired up in the demo above. `MultiSelect` 
 
 ### Event Handling Tips
 
-1. **Type Safety**: For better type checking in TypeScript projects, use the `MultiSelectEvents` interface:
+1. **Type Safety**: Type handlers with the `MultiSelectEvents` interface:
 
-   ```ts
+   ```svelte
    <script lang="ts">
-    import type { MultiSelectEvents } from 'svelte-widgets'
+     import type { MultiSelectEvents } from 'svelte-widgets'
 
      const on_add: MultiSelectEvents['on_add'] = (data) => {
        console.log(`on_add`, data)
@@ -228,8 +229,8 @@ The tables below list only the events wired up in the demo above. `MultiSelect` 
    <MultiSelect {on_add} options={[{ label: `foo` }]} />
    ```
 
-   Native DOM event handlers like `onblur`, `onfocus`, `onkeydown`, etc. are forwarded from the `<input>` element and use standard DOM event types (e.g. `FocusEvent`, `KeyboardEvent`).
+   Native handlers like `onblur` or `onkeydown` attach to the search `<input>` and get standard DOM event types (e.g. `FocusEvent`, `KeyboardEvent`).
 
-1. **Custom Options**: The `on_create` event only fires when `allow_user_options` is enabled and users type (or, with `parse_paste`, paste) text that doesn't match existing options. Text typed while an async `on_create` is pending is kept. With `input_display`, where the visible text is the selection, such an edit also cancels selecting the created option: it is still appended to `options` under `allow_user_options="append"`, but `on_add` and `on_change` don't fire.
+1. **Custom Options**: `on_create` only fires with `allow_user_options`, when users type (or, with `parse_paste`, paste) text that doesn't match existing options. Text typed while an async `on_create` is pending is kept. With `input_display`, where the visible text is the selection, such an edit also cancels selecting the created option: it is still appended to `options` under `allow_user_options="append"`, but `on_add` and `on_change` don't fire.
 
-1. **Search and Navigation**: The `on_search` event is debounced (150ms) to avoid excessive callbacks while typing. `on_activate` only fires during keyboard navigation (arrow keys), not on mouse hover. `on_duplicate` fires when a duplicate is rejected with `duplicates={false}` (the default) or `duplicates="case-insensitive"`.
+1. **Search and Navigation**: `on_activate` fires only on arrow-key navigation, not on mouse hover. `on_duplicate` fires when a duplicate is rejected with `duplicates={false}` (the default) or `duplicates="case-insensitive"`.
