@@ -318,8 +318,15 @@ test.describe(`Nav dropdown`, () => {
       expect(box.x).toBeCloseTo(boxes[idx < n_rows ? 0 : n_rows].x, 0)
       if (idx % n_rows > 0) expect(box.top).toBeGreaterThan(boxes[idx - 1].top)
     }
-    expect(boxes[n_rows].x).toBeGreaterThan(boxes[0].right)
-    expect(boxes[n_rows].x - boxes[0].right).toBeLessThanOrEqual(4)
+    // a hairline rule sits between the columns, a column gap on either side of it
+    const rule = await menu.locator(`.column-rule`).evaluate((el) => {
+      const { x, right, height } = el.getBoundingClientRect()
+      return { x, right, height }
+    })
+    expect(boxes[0].right).toBeLessThanOrEqual(rule.x)
+    expect(rule.right).toBeLessThanOrEqual(boxes[n_rows].x)
+    expect(rule.height).toBeGreaterThan(0)
+    expect(boxes[n_rows].x - boxes[0].right).toBeLessThanOrEqual(10)
     expect(boxes[n_rows].width).not.toBe(boxes[0].width)
     expect(boxes[n_rows].top).toBeCloseTo(boxes[0].top, 0)
     // Keyboard order follows the first column to the top of the second.
