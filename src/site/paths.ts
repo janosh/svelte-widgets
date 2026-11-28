@@ -1,6 +1,6 @@
 import { resolve } from '$app/paths'
 import { page } from '$app/state'
-import { demo_descriptions, demo_pages, demo_title } from '../routes/(demos)'
+import { demo_descriptions, demo_icons, demo_pages, demo_title } from '../routes/(demos)'
 import type { Subpage } from '#lib/types.ts'
 
 // SvelteKit can resolve links relatively during SSR. Navigation state needs the same
@@ -19,7 +19,7 @@ export const demo_link = (route: string) => ({
 })
 
 export function demo_card(route: string): Subpage {
-  const description = demo_descriptions[route]
-  if (!description) throw new Error(`Missing demo description: ${route}`)
-  return { ...demo_link(route), description }
+  const [description, icon] = [demo_descriptions[route], demo_icons[route]]
+  if (!description || !icon) throw new Error(`Missing demo description or icon: ${route}`)
+  return { ...demo_link(route), description, icon }
 }
