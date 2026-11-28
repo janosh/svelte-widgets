@@ -8,7 +8,7 @@ To report a bug, open an issue with a minimal repro, e.g. starting from the [Sve
 
 To submit a pull request, clone the repo, install dependencies and start the dev server to see changes as you make them.
 
-Use Node.js 24.11 or newer, matching CI's Node 24 line and the tooling's minimum version.
+Use Node.js 22.18+, 24.11+ or 26+, the lines vite-plus supports (not 23 or 25); CI runs Node 24.
 
 ```sh
 git clone https://github.com/janosh/svelte-widgets
@@ -19,14 +19,10 @@ npx vp dev
 
 `--legacy-peer-deps` is needed because vite-plus and standalone Vitest require different versions of optional browser adapters.
 
-Before you start committing, create and check out a descriptively named branch:
+Before committing, check out a descriptively named branch:
 
 ```sh
 git checkout -b my-cool-new-feature
-# or
-git checkout -b docs-on-something
-# or
-git checkout -b test-some-feature
 ```
 
 Run the tests covering your changes, for example:
@@ -56,13 +52,13 @@ Readme links to API symbols carry `#L` line anchors derived from each symbol's d
 
 ## 🆕 New release
 
-To make a release, increase the `"version"` field in [`package.json`](https://github.com/janosh/svelte-widgets/blob/main/package.json). This package follows semantic versioning, meaning
+To make a release, bump `"version"` in [`package.json`](https://github.com/janosh/svelte-widgets/blob/main/package.json) following semantic versioning:
 
 - `v[x.y.z] -> v[x+1.0.0]`: major release with breaking changes
 - `v[x.y.z] -> v[x.y+1.0]`: minor release with new features
 - `v[x.y.z] -> v[x.y.z+1]`: patch release with bug fixes
 
-The 1.8.0 and 1.9.0 releases are explicit exceptions: they include the breaking API cleanups documented in the [changelog](https://github.com/janosh/svelte-widgets/blob/main/changelog.md) and migration guides ([1.8](https://github.com/janosh/svelte-widgets/blob/main/readme.md#migrating-to-18), [1.9](https://github.com/janosh/svelte-widgets/blob/main/readme.md#migrating-to-19)).
+The 1.8.0, 1.9.0 and 1.13.0 releases are explicit exceptions: they include the breaking API cleanups documented in the [changelog](https://github.com/janosh/svelte-widgets/blob/main/changelog.md) and migration guides ([1.8](https://github.com/janosh/svelte-widgets/blob/main/readme.md#migrating-to-18), [1.9](https://github.com/janosh/svelte-widgets/blob/main/readme.md#migrating-to-19), [1.13](https://github.com/janosh/svelte-widgets/blob/main/readme.md#migrating-to-113)).
 
 Update [`changelog.md`](https://github.com/janosh/svelte-widgets/blob/main/changelog.md) with concise release notes, including migration instructions for breaking changes. Link the release heading to a comparison with the previous `svelte-widgets` release; for 1.9.0, compare `v1.8.0...v1.9.0`. This repository also contains historical `svelte-multiselect` tags, so sorting all tags does not identify the previous `svelte-widgets` release.
 
@@ -83,4 +79,4 @@ git push origin main
 git push origin vx.y.z
 ```
 
-Finally, [publish a new release on GitHub](https://github.com/janosh/svelte-widgets/releases/new). Publishing the release runs the CI workflow's `publish` job, which pushes the package to npm through trusted publishing (OIDC) once the tests pass, so no manual `npm publish` is needed.
+Finally, [publish a new release on GitHub](https://github.com/janosh/svelte-widgets/releases/new). That runs the CI workflow's `publish` job, which pushes the package to npm through trusted publishing (OIDC) once the tests pass; no manual `npm publish` is needed.

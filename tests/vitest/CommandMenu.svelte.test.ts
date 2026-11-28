@@ -1,5 +1,10 @@
 import { CommandMenu, PageSearch } from '#lib'
-import type { CmdAction, LoadOptionsParams } from '#lib/types.ts'
+import type {
+  CmdAction,
+  CommandMenuCloseVia,
+  CommandMenuOpenVia,
+  LoadOptionsParams,
+} from '#lib/types.ts'
 import { MULTI_SELECT_LABELS } from '#lib/labels.ts'
 import { type ComponentProps, tick } from 'svelte'
 import { beforeEach, describe, expect, expectTypeOf, test, vi } from 'vite-plus/test'
@@ -44,6 +49,17 @@ const shortcut_kbd_parts = () =>
 
 const stored_recents = (key: string): unknown =>
   JSON.parse(localStorage.getItem(key) ?? `[]`)
+
+const dialog_el = () => doc_query<HTMLDialogElement>(`dialog`)
+
+// a pointerdown at press_xy outside a stubbed dialog box at (100..300, 100..200)
+const press_backdrop = (press_xy = 10) => {
+  const dialog = dialog_el()
+  dialog.getBoundingClientRect = () =>
+    ({ left: 100, top: 100, right: 300, bottom: 200 }) as DOMRect
+  dialog.dispatchEvent(pointer_event(`pointerdown`, press_xy, press_xy))
+  return dialog
+}
 
 const press_ctrl_shift = (key: string) =>
   press_key(globalThis, key, { ctrlKey: true, shiftKey: true })
@@ -172,11 +188,7 @@ test.each([
     })
     mount_menu(props)
 
-    const dialog = doc_query<HTMLDialogElement>(`dialog`)
-    dialog.getBoundingClientRect = () =>
-      ({ left: 100, top: 100, right: 300, bottom: 200 }) as DOMRect
-    dialog.dispatchEvent(pointer_event(`pointerdown`, press_xy, press_xy))
-    dialog.dispatchEvent(pointer_event(`click`, 10, 10))
+    press_backdrop(press_xy).dispatchEvent(pointer_event(`click`, 10, 10))
     await tick()
 
     expect(props.open).toBe(!should_close)
@@ -186,7 +198,8 @@ test.each([
 
 test(`opens a labeled native light-dismiss modal and forwards styling props`, async () => {
   const show_modal = vi.spyOn(HTMLDialogElement.prototype, `showModal`)
-  let style_reads = 0 // each option row render reads its style once
+  // each option row render reads li_option_props 3 times (spread, class, title fallback)
+  let style_reads = 0
   mount_menu({
     // more rows than the two an arrow key moves between, so re-running all would show
     actions: make_actions(`a1`, `a2`, `a3`, `a4`, `a5`, `a6`),
@@ -197,9 +210,9 @@ test(`opens a labeled native light-dismiss modal and forwards styling props`, as
     class: `my-custom-class`,
     placeholder: `Custom placeholder`,
     dialog_props: { style: `padding: 20px;` },
-    get li_option_style() {
+    get li_option_props() {
       style_reads++
-      return `font-weight: bold;`
+      return { style: `font-weight: bold;` }
     },
   })
 
@@ -219,7 +232,7 @@ test(`opens a labeled native light-dismiss modal and forwards styling props`, as
   key_reads.count = 0
   press_key(menu_input(), `ArrowDown`)
   await tick()
-  expect([style_reads, key_reads.count]).toEqual([2, 2])
+  expect([style_reads, key_reads.count]).toEqual([6, 2])
 })
 
 test(`handles action selection and execution`, async () => {
@@ -452,6 +465,101 @@ test(`native dialog close resets state and forwards dialog_props.onclose`, async
     active_option: null,
     search_text: ``,
   })
+})
+
+// records open/close reports in order, so a test sees each change exactly once
+const track_reports = () => {
+  const reports: [`open` | `close`, string][] = []
+  return {
+    reports,
+    on_open: ({ via }: { via: CommandMenuOpenVia }) => reports.push([`open`, via]),
+    on_close: ({ via }: { via: CommandMenuCloseVia }) => reports.push([`close`, via]),
+  }
+}
+
+// native dialog paths (Escape cancel, closedby light dismiss) are emulated by the input that
+// precedes them, then a bare dialog.close() as the browser would issue
+test.each([
+  [`shortcut`, false, {}, () => press_key(globalThis, `k`, { metaKey: true })],
+  [`escape`, true, {}, () => press_key(menu_input(), `Escape`)],
+  [
+    `shortcut`,
+    true,
+    { close_keys: [`x`] as string[] },
+    () => press_key(menu_input(), `x`),
+  ],
+  [
+    `pointer`,
+    true,
+    {},
+    () => press_backdrop().dispatchEvent(pointer_event(`click`, 10, 10)),
+  ],
+  [`select`, true, {}, () => press_key(menu_input(), `Enter`)],
+  [
+    `escape`,
+    true,
+    { close_keys: [`q`] as string[], dialog_props: { closedby: `any` as const } },
+    () => {
+      press_key(globalThis, `Escape`)
+      dialog_el().close()
+    },
+  ],
+  [`pointer`, true, {}, () => press_backdrop().close()],
+  [`programmatic`, true, {}, () => dialog_el().close()],
+] as const)(
+  `reports via=%s once (initially open: %s, props %j)`,
+  async (via, open, extra, act) => {
+    const { reports, on_open, on_close } = track_reports()
+    mount_menu({ open, actions: mock_actions, on_open, on_close, ...extra })
+    await tick()
+    expect(reports).toEqual([]) // mounting reports nothing, open or not
+
+    act()
+    await tick()
+    await tick()
+    expect(reports).toEqual([[open ? `close` : `open`, via]])
+  },
+)
+
+test(`a bound open change reports programmatic, and a callback flipping it back reports too`, async () => {
+  const { reports, on_open, on_close } = track_reports()
+  const props = $state({
+    open: false,
+    actions: mock_actions,
+    on_open: (detail: { via: CommandMenuOpenVia }) => {
+      on_open(detail)
+      if (detail.via === `shortcut`) props.open = false
+    },
+    on_close: (detail: { via: CommandMenuCloseVia }) => {
+      on_close(detail)
+      if (detail.via === `select`) props.open = true
+    },
+  })
+  mount_menu(props)
+
+  for (const value of [true, false]) {
+    props.open = value
+    await tick()
+  }
+  press_key(globalThis, `k`, { ctrlKey: true }) // on_open closes it again
+  await tick()
+  await tick()
+  props.open = true
+  await tick()
+  press_key(menu_input(), `Enter`) // on_close reopens it
+  await tick()
+  await tick()
+
+  expect(props.open).toBe(true)
+  expect(reports).toEqual([
+    [`open`, `programmatic`],
+    [`close`, `programmatic`],
+    [`open`, `shortcut`],
+    [`close`, `programmatic`],
+    [`open`, `programmatic`],
+    [`close`, `select`],
+    [`open`, `programmatic`],
+  ])
 })
 
 test(`renders an empty list and later plain actions as default option rows`, async () => {
@@ -1172,6 +1280,27 @@ describe(`PageSearch`, () => {
       )
     },
   )
+
+  // PageSearch forwards the callbacks to its CommandMenu, which alone tracks open
+  test(`forwards on_open and on_close, each change reported once`, async () => {
+    const { reports, on_open, on_close } = track_reports()
+    mount_page_search({
+      load_pagefind: async () => ({ search: vi.fn() }),
+      on_open,
+      on_close,
+    })
+    await tick()
+    expect(reports).toEqual([])
+
+    press_key(menu_input(), `Escape`)
+    await tick()
+    press_key(globalThis, `k`, { metaKey: true })
+    await tick()
+    expect(reports).toEqual([
+      [`close`, `escape`],
+      [`open`, `shortcut`],
+    ])
+  })
 
   test(`without load_pagefind imports the default index path and keeps fallbacks`, async ({
     onTestFinished,

@@ -185,11 +185,11 @@ Select an interval by dragging the handles, clicking the track, using the keyboa
 
 ### Interaction details
 
-- **Drag or tap:** the nearest handle moves. Handles stop at one another. At the same value, drag in either direction to separate them.
+- **Drag or tap:** the nearest handle moves, stopping at the other one. At the same value, drag either way to separate them.
 - **Keyboard:** Tab reaches each handle in a fixed order. Arrows move one step; Shift + arrow and Page Up / Down move ten. Home / End reach that handle’s allowed bounds.
-- **Type:** edits apply on Enter or blur, snap to the nearest step, and stay within the allowed interval. Escape discards a draft. Empty or invalid drafts restore the current value.
+- **Type:** edits apply on Enter or blur, snap to the nearest step and clamp to the allowed interval. Escape discards a draft; empty or invalid drafts restore the current value.
 - **Events:** binding and `on_input` update while dragging. `on_commit` runs at the end of a changed gesture, on each keyboard adjustment, or after a changed numeric edit. Pointer cancellation keeps and commits the last value. External prop updates emit neither callback.
-- **Logarithmic scale:** `scale="log"` spaces positions and ticks geometrically. `min`, `max`, bound values, numeric fields, formatters, and callbacks stay in real units. `step` is a base-10 exponent increment: `1` multiplies or divides by 10; `0.1` uses a factor of 10^0.1. Positive numeric drafts snap to this logarithmic grid and clamp to the allowed interval; zero and negative drafts are discarded. Both endpoints remain exactly selectable, even off the grid.
+- **Logarithmic scale:** `scale="log"` spaces positions and ticks geometrically. `min`, `max`, bound values, numeric fields, formatters and callbacks stay in real units. `step` is a base-10 exponent increment: `1` multiplies or divides by 10, `0.1` by 10^0.1. Positive numeric drafts snap to this grid and clamp to the allowed interval; zero and negative drafts are discarded. Both endpoints stay exactly selectable, even off the grid.
 
 ### Props
 
@@ -206,9 +206,9 @@ Select an interval by dragging the handles, clicking the track, using the keyboa
 | `show_inputs / disabled`    | `true / false`      | Make selected values read-only or disable every interaction.                                                                                                                                                   |
 | `on_input / on_commit`      | —                   | Receive a fresh value pair for live and completed edits.                                                                                                                                                       |
 
-External values must be finite, ordered, and inside the bounds. Update bounds and value together when changing the domain. Invalid configuration, including steps too small to change a representable value, throws with the offending values. Extra HTML attributes are forwarded to the group. Native form reset discards numeric drafts; reset the binding in your form handler to restore a saved interval.
+External values must be finite, ordered and inside the bounds, so update bounds and value together when changing the domain. Invalid configuration, including steps too small to change a representable value, throws with the offending values. Extra HTML attributes go to the group. Native form reset discards numeric drafts; reset the binding in your form's `onreset` handler to restore a saved interval.
 
-Style with `--range-slider-color`, `--range-slider-track`, `--range-slider-thumb`, and `--range-slider-input-bg`. Touch targets are 44 pixels, focus rings remain visible, and the control supports reduced motion and forced colors.
+Style with `--range-slider-color`, `--range-slider-track`, `--range-slider-thumb` and `--range-slider-input-bg`. Touch targets are 44 px, focus rings stay visible, and the control supports reduced motion and forced colors.
 
 <style>
   .showcase {

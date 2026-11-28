@@ -13,22 +13,6 @@
 
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <!-- FOUC mirror of apply_theme_mode: light/dark as-is; anything else via matchMedia. -->
-    <script>
-      {
-        let effective_theme
-        try {
-          effective_theme = localStorage.getItem(`theme`)
-        } catch {}
-        if (effective_theme !== `light` && effective_theme !== `dark`)
-          effective_theme = globalThis.matchMedia?.(`(prefers-color-scheme: dark)`)
-            .matches
-            ? `dark`
-            : `light`
-        document.documentElement.style.colorScheme = effective_theme
-        document.documentElement.dataset.theme = effective_theme
-      }
-    </script>
 
     <meta property="og:type" content="article" />
     <!-- absolute URL since social scrapers can't resolve site-relative paths or data URIs -->

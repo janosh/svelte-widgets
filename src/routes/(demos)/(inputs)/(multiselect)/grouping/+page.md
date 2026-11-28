@@ -1,6 +1,6 @@
 ## Option Grouping
 
-Group related options together with visual headers. Add a `group` key to option objects and they're automatically grouped with section headers. Requested in [GitHub issue #135](https://github.com/janosh/svelte-widgets/issues/135).
+Options with a `group` key are listed under group headers. Requested in [janosh/svelte-widgets#135](https://github.com/janosh/svelte-widgets/issues/135).
 
 ### Basic Grouping
 
@@ -35,11 +35,11 @@ Group related options together with visual headers. Add a `group` key to option 
 <p>Selected: {selected.map((opt) => opt.label).join(`, `) || `none`}</p>
 ```
 
-> **Note:** Search filtering works automatically—empty groups are hidden when no options match.
+> **Note:** Groups with no matching options are hidden while searching.
 
 ### Collapsible Groups
 
-Enable `collapsible_groups` to let users collapse/expand groups. Use `search_expands_collapsed_groups` or `keyboard_expands_collapsed_groups` for auto-expansion:
+`collapsible_groups` lets users collapse and expand groups; `search_expands_collapsed_groups` and `keyboard_expands_collapsed_groups` expand them automatically:
 
 ```svelte example id="collapsible-groups-demo"
 <script lang="ts">
@@ -98,7 +98,7 @@ Enable `collapsible_groups` to let users collapse/expand groups. Use `search_exp
 
 ### Per-Group Select All
 
-Enable `group_select_all` to add a toggle button to each group header:
+`group_select_all` adds a select/deselect-all toggle to each group header:
 
 ```svelte example id="group-select-all"
 <script lang="ts">
@@ -274,7 +274,7 @@ Use the `group_header` snippet for complete control over header rendering:
   collapsible_groups
   group_select_all
   placeholder="Select cities..."
-  li_group_header_style="gap: 8px"
+  li_group_header_props={{ style: `gap: 8px` }}
 >
   {#snippet group_header({ group, options, collapsed })}
     <span style="font-size: 1.2em">{emojis[group]}</span>

@@ -1,6 +1,6 @@
 import {
   apply_theme_mode,
-  watch_theme,
+  init_theme,
   theme,
   theme_init_script,
   ThemeScript,
@@ -18,6 +18,7 @@ beforeEach(() => {
   sessionStorage.clear()
   document.documentElement.style.colorScheme = ``
   delete document.documentElement.dataset.theme
+  delete document.documentElement.dataset.themeMode
 })
 
 afterEach(() => void vi.unstubAllGlobals())
@@ -32,25 +33,30 @@ const applied_theme = () => [
   document.documentElement.style.colorScheme,
   document.documentElement.dataset.theme,
 ]
+const applied_mode = () => document.documentElement.dataset.themeMode
 // Runs the <head> script exactly as the browser does: from its source string
 // oxlint-disable-next-line typescript/no-implied-eval -- evaluating that string is the test
 const run_init_script = () => new Function(theme_init_script)()
 
 const rendered_icon_path = () => doc_query(`button svg path`).getAttribute(`d`)
 
-test(`initial render stays hidden until hydration`, async () => {
+// The server can't know the stored mode, so the pre-hydration markup holds every icon and
+// CSS shows the one theme_init_script's data-theme-mode names; mounting swaps in just that one
+test(`renders every mode's icon until hydration, then only the current one`, async () => {
   localStorage.setItem(`theme`, `dark`)
   // mounted without render()'s flush: this checks the markup before effects run
   const toggle = mount(ThemeToggle, { target: document.body, props: {} })
   onTestFinished(() => unmount(toggle))
   const button = doc_query<HTMLButtonElement>(`button`)
-  expect(button.style.visibility).toBe(`hidden`)
-  expect(button.querySelector(`svg`)).toBeNull()
+  const icons = () =>
+    [...button.querySelectorAll(`svg`)].map((svg) => svg.getAttribute(`data-mode`))
+  expect(icons()).toEqual([`light`, `dark`, `system`])
   // applying it pre-hydration would flash a theme the icon disagrees with
   expect(applied_theme()).toEqual([``, undefined])
 
   await tick()
-  expect(button.style.visibility).toBe(`visible`)
+  expect(icons()).toEqual([null])
+  expect(rendered_icon_path()).toBe(Moon.d)
   expect(applied_theme()).toEqual([`dark`, `dark`])
 })
 
@@ -85,7 +91,6 @@ test(`without storage, mount keeps an externally applied theme and clicks still 
   apply_theme_mode(`dark`)
 
   const button = await mount_theme_toggle()
-  expect(button.style.visibility).toBe(`visible`)
   expect(applied_theme()).toEqual([`dark`, `dark`])
   expect(rendered_icon_path()).toBe(Moon.d)
 
@@ -116,11 +121,11 @@ const start_toggle = async () => {
   await tick()
   return () => void unmount_toggle()
 }
-const start_watcher = async () => watch_theme()
+const start_watcher = async () => init_theme()
 
 test.each([
   [`ThemeToggle`, start_toggle],
-  [`watch_theme`, start_watcher],
+  [`init_theme`, start_watcher],
 ])(`system mode follows the OS via %s`, async (_owner, start) => {
   let matches = false
   let change_handler: (() => void) | undefined
@@ -236,9 +241,9 @@ test(`apply_theme_mode keeps mounted ThemeToggles in sync`, async () => {
   }
 })
 
-test(`watch_theme fails clearly without a document`, () => {
+test(`init_theme fails clearly without a document`, () => {
   vi.stubGlobal(`document`, undefined)
-  expect(() => watch_theme()).toThrow(`watch_theme() is client-only`)
+  expect(() => init_theme()).toThrow(`init_theme() is client-only`)
 })
 
 // theme_init_script runs before hydration, so it must land on what apply_theme_mode applies.
@@ -259,9 +264,10 @@ test.each([
     if (stored === `denied`) vi.stubGlobal(`localStorage`, null)
     else if (stored !== null) localStorage.setItem(`theme`, stored)
     run_init_script()
-    expect(applied_theme()).toEqual([expected, expected])
-    apply_theme_mode(stored === `light` || stored === `dark` ? stored : `system`)
-    expect(applied_theme()).toEqual([expected, expected])
+    const mode = stored === `light` || stored === `dark` ? stored : `system`
+    expect([...applied_theme(), applied_mode()]).toEqual([expected, expected, mode])
+    apply_theme_mode(mode)
+    expect([...applied_theme(), applied_mode()]).toEqual([expected, expected, mode])
   },
 )
 

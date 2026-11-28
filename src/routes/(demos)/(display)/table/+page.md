@@ -1,10 +1,10 @@
 ## DataTable
 
-`DataTable` from `svelte-widgets/table` is a ready-made table built from the pieces below. Click a header to sort (Shift-click adds sort keys), open a funnel to filter a column, search, show or hide columns, drag a header edge (or focus it and press the arrow keys) to resize, double-click the edge to fit the content, drag a header to reorder it within its group, and right-click a header or cell to pin the column to either edge or copy it. Drag across cells and press Cmd/Ctrl+C to copy them, or export the visible rows.
+`DataTable` from `svelte-widgets/table` is a ready-made table assembled from the pieces below. Click a header to sort (Shift-click adds sort keys), open a funnel to filter a column, search, show or hide columns, drag a header edge (or focus it and press the arrow keys) to resize, double-click the edge to fit the content, drag a header to reorder it within its group, and right-click a header or cell to pin the column to either edge or copy it. Drag across cells and press Cmd/Ctrl+C to copy them, or export the visible rows.
 
 Bind `sort` (a list of `{ column, dir }` keys in priority order, empty for the data's order) and `hidden_columns` to persist them. A column with `visible: false` starts hidden but stays in the column picker, whose Reset hides it again; `disabled` locks a column's toggle, and `pin` sticks it to the `left` or `right` edge. Attributes for the toolbar go in `controls_props`.
 
-Number formatting, HTML rendering and cell colors are hooks: `format_number`, `render_html` (cells and labels render as escaped text unless you pass a sanitizer) and `column_color`, which here shades the mass column. It is called again only when the column's extrema or color domain change, so it needs no caching. MatterViz's `HeatmapTable` wraps `DataTable` with d3 color scales in the same way.
+Number formatting, HTML rendering and cell colors are hooks: `format_number`, `render_html` (cells and labels render as escaped text unless you pass a sanitizer) and `column_color` (here shading the mass column), which reruns only when the column's extrema or color domain change, so it needs no caching. MatterViz's `HeatmapTable` wraps `DataTable` with d3 color scales in the same way.
 
 ```svelte example id="data-table"
 <script lang="ts">
@@ -101,7 +101,7 @@ Number formatting, HTML rendering and cell colors are hooks: `format_number`, `r
 
 ### Angled header labels
 
-Set `label_angle` (degrees, up to 90) on a column to tilt its header label up from the column's center, so a long name over a narrow column no longer sets its width. The header row grows to fit the tallest label, and labels lean over the headers to their right.
+Set `label_angle` (degrees, up to 90) on a column to tilt its header label up from the column's center, so a long name no longer sets a narrow column's width. The header row grows to fit the tallest label, and labels lean over the headers to their right.
 
 ```svelte example id="data-table-angled"
 <script lang="ts">
@@ -125,7 +125,7 @@ Set `label_angle` (degrees, up to 90) on a column to tilt its header label up fr
 
 ### Large tables
 
-Past 500 rows, `DataTable` renders only the rows near the viewport, with spacer rows standing in for the rest, so mount time stays flat as rows grow. Give it a height limit (`scroll_style` or a sized parent) to scroll inside the table under a sticky header; without one, the rendered rows follow the page scroll. Rows outside the window aren't in the DOM, so find-in-page, printing, DOM queries and server-rendered HTML see only those, column widths can shift as wider or narrower rows scroll in, and `row_animation_ms` is off. Sorting, search, filters, select-all, copy and export still cover every row. Pass `virtual` (`true` or `{ overscan, min_window }`) to virtualize any table, or `virtual={false}` to always render every row. Pagination turns it off. `striped` zebra-stripes rows by index (color: `--table-stripe-bg`), so spacer rows can't flip the stripes the way a `tr:nth-child(odd)` rule does, and pinned columns get the stripe too.
+Past 500 rows, `DataTable` renders only rows near the viewport (default `overscan` 10, `min_window` 60), with spacer rows standing in for the rest, so mount time stays flat. Give it a height limit (a `max-height` in `scroll_props.style`, or a sized parent) to scroll inside the table under a sticky header; without one, the rendered rows follow the page scroll. Rows outside the window aren't in the DOM, so find-in-page, printing, DOM queries and server-rendered HTML see only those, column widths can shift as wider or narrower rows scroll in, and `row_animation_ms` is off. Sorting, search, filters, select-all, copy and export still cover every row. Pass `virtual` (`true` or `{ overscan, min_window }`) to virtualize any table, or `virtual={false}` to always render every row. Pagination turns it off. `striped` zebra-stripes rows by index (color: `--table-stripe-bg`), so spacer rows can't flip the stripes the way a `tr:nth-child(odd)` rule does, and pinned columns get the stripe too.
 
 ```svelte example id="data-table-large"
 <script lang="ts">
@@ -138,7 +138,7 @@ Past 500 rows, `DataTable` renders only the rows near the viewport, with spacer 
   }))
 </script>
 
-<DataTable {data} scroll_style="max-height: 400px" striped />
+<DataTable {data} scroll_props={{ style: `max-height: 400px` }} striped />
 ```
 
 ## Table building blocks
@@ -147,7 +147,7 @@ The same parts, for tables that keep their own markup and row model: `ColumnPick
 
 ### Composed table
 
-Click a header to sort, open a funnel to filter that column, toggle columns from the menu, drag across cells (Shift/Cmd/Ctrl-drag adds ranges) and press Cmd/Ctrl+C to copy them, or download the visible rows.
+The same interactions as above with your own markup: Shift/Cmd/Ctrl-drag adds cell ranges, and the buttons download the visible rows.
 
 ```svelte example id="table-composed"
 <script lang="ts">
@@ -377,7 +377,11 @@ Click a header to sort, open a funnel to filter that column, toggle columns from
       cursor: pointer;
     }
     td.selected {
-      background: color-mix(in srgb, var(--accent-color, #4a9eff) 25%, transparent);
+      background: color-mix(
+        in srgb,
+        var(--accent-color, light-dark(#4a7abf, cornflowerblue)) 25%,
+        transparent
+      );
     }
   }
 </style>
@@ -411,17 +415,17 @@ table_to_text(
 // | Iron | 26 |
 ```
 
-Selection coordinates index your current rows and columns, so the selection must clear whenever those change: after a sort, filter, or hiding or reordering columns. Pass `new CellSelection(() => [rows, columns])` a function reading them to clear it whenever they are reassigned (spread arrays you mutate in place, `() => [...rows, ...columns]`), or call `selection.clear()` yourself. A forgotten clear doesn't throw, as long as `cell_text` returns `undefined` for cells out of range.
+Selection coordinates index your current rows and columns, so the selection must clear whenever those change (sort, filter, hiding or reordering columns). Pass `new CellSelection(() => [rows, columns])` to clear it whenever they are reassigned (spread arrays you mutate in place: `() => [...rows, ...columns]`), or call `selection.clear()` yourself. A forgotten clear doesn't throw, as long as `cell_text` returns `undefined` for cells out of range.
 
 ### Main API
 
-| Export                                    | Purpose                                                                                                                                                                                                                                                                                                                                                                                                |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ColumnPicker`                            | `bind:columns` of `TableColumn` (`id`, `label`, `group`, `description`, `visible`, `default_visible`, `disabled`). Sections by `group` (`bind:collapsed_groups`), searches past `search_threshold` columns, resets per section or globally to each column's default. Snippets: `trigger`, `header`, `toggle_label`, `description`. `on_toggle(column, visible)` reports every change, resets included. |
-| `ColumnFilter`                            | `bind:filter` (a `ColumnFilterValue`) and `bind:open` for the `column` it names. `values()` is read lazily while open; `options` (what `filter_panel` takes: `kind`, `numeric`, `category_limit` and the cell readers) and `format_bound` tune the panel. Snippets: `trigger`, `option`.                                                                                                               |
-| `CellSelection`                           | Reactive rectangles with `has(row, col)`, `size`, `start_drag` / `extend_drag` / `end_drag`, `step` for Shift+arrow growth, `clear` and `to_tsv`. The optional constructor argument reads the rows and columns, clearing the selection when they change.                                                                                                                                               |
-| `cell_range_select(selection, options)`   | Attachment wiring pointer drags, Escape, outside presses and copy events (Cmd/Ctrl+C, Edit > Copy, given `cell_text`) onto cells marked `data-row` / `data-col` (or your own `cell_at`). Touch presses scroll instead of selecting.                                                                                                                                                                    |
-| `table_to_text(matrix, format)`           | CSV (RFC 4180 via `svelte-widgets/format`), TSV, Markdown or LaTeX from a `TableMatrix` of plain-text headers and rows.                                                                                                                                                                                                                                                                                |
-| `table_to_json(rows, columns, to_value?)` | Rows as objects keyed by stable column IDs, so renamed or repeated headers never collide.                                                                                                                                                                                                                                                                                                              |
+| Export                                    | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ColumnPicker`                            | `bind:columns` of `TableColumn` (`id`, `label`, `group`, `description`, `visible`, `default_visible`, `disabled`). Sections by `group` (`bind:collapsed_groups`), searches past `search_threshold` columns, resets per section or globally to each column's default. Snippets: `trigger`, `header`, `toggle_label`, `description`. `on_toggle(column, visible)` reports every change, resets included. `on_open`/`on_close` report `{ via }` (`trigger`, `dismiss` or `programmatic`), never on mount. |
+| `ColumnFilter`                            | `bind:filter` (a `ColumnFilterValue`) and `bind:open` for the `column` it names. `values()` is read lazily while open; `options` (what `filter_panel` takes: `kind`, `numeric`, `category_limit` and the cell readers) and `format_bound` tune the panel. Snippets: `trigger`, `option`. `on_open`/`on_close` as for `ColumnPicker`.                                                                                                                                                                   |
+| `CellSelection`                           | Reactive rectangles with `has(row, col)`, `size`, `start_drag` / `extend_drag` / `end_drag`, `step` for Shift+arrow growth, `clear` and `to_tsv`. The optional constructor argument reads the rows and columns, clearing the selection when they change.                                                                                                                                                                                                                                               |
+| `cell_range_select(selection, options)`   | Attachment wiring pointer drags, Escape, outside presses and copy events (Cmd/Ctrl+C, Edit > Copy, given `cell_text`) onto cells marked `data-row` / `data-col` (or your own `cell_at`). Touch presses scroll instead of selecting.                                                                                                                                                                                                                                                                    |
+| `table_to_text(matrix, format)`           | CSV (RFC 4180 via `svelte-widgets/format`), TSV, Markdown or LaTeX from a `TableMatrix` of plain-text headers and rows.                                                                                                                                                                                                                                                                                                                                                                                |
+| `table_to_json(rows, columns, to_value?)` | Rows as objects keyed by stable column IDs, so renamed or repeated headers never collide.                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 Both components take `labels` for translation, `class`, `style` and other attributes on their root, and CSS custom properties prefixed `--column-picker-` and `--column-filter-` (see [theming](theming)).

@@ -18,7 +18,7 @@ const DECIMAL_RE = new RegExp(`^${DECIMAL_SRC}$`)
 
 // Finite number or decimal literal ("−3" with a Unicode minus too), else null. Same syntax
 // (DECIMAL_SRC) as data.ts's cell reading, so a bound parses like the cells it filters.
-export const default_to_number = (val: unknown): number | null => {
+const default_to_number = (val: unknown): number | null => {
   if (typeof val === `number`) return Number.isFinite(val) ? val : null
   if (typeof val !== `string`) return null
   const text = val.trim()
@@ -27,7 +27,7 @@ export const default_to_number = (val: unknown): number | null => {
   return Number.isFinite(num) ? num : null // `1e400` overflows to Infinity
 }
 
-export const default_to_text = (val: unknown): string => {
+const default_to_text = (val: unknown): string => {
   if (typeof val === `string`) return val.trim()
   if (typeof val === `number`) return Number.isNaN(val) ? `` : String(val)
   if (typeof val === `boolean` || typeof val === `bigint`) return String(val)

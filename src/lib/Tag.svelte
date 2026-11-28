@@ -112,14 +112,17 @@
 
 <style>
   .tag {
-    --tag-fill: var(--tag-color, var(--accent, cornflowerblue));
+    --tag-fill: var(
+      --tag-color,
+      var(--accent-color, light-dark(#4a7abf, cornflowerblue))
+    );
     display: inline-flex;
     align-items: center;
     box-sizing: border-box;
     max-width: 100%;
     vertical-align: middle;
     border: var(--tag-border-width, 1px) solid var(--tag-border-color, transparent);
-    border-radius: var(--tag-border-radius, 1em);
+    border-radius: var(--tag-radius, 1em);
     background: var(--tag-bg, color-mix(in srgb, var(--tag-fill) 18%, transparent));
     color: var(--tag-text-color, inherit);
     font-size: var(--tag-font-size, 0.85em);

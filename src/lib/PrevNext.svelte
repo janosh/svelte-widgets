@@ -77,12 +77,15 @@
     margin: var(--prev-next-margin, 3em auto);
   }
   .prev-next a {
-    color: var(--prev-next-color, var(--accent, cornflowerblue));
+    color: var(
+      --prev-next-color,
+      var(--accent-color, light-dark(#4a7abf, cornflowerblue))
+    );
     background: var(--prev-next-link-bg);
     padding: var(--prev-next-link-padding);
-    border-radius: var(--prev-next-link-border-radius);
+    border-radius: var(--prev-next-link-radius);
     &:hover {
-      color: var(--prev-next-hover-color, var(--accent-hover, orange));
+      color: var(--prev-next-hover-color, var(--accent-hover-color, orange));
     }
   }
   .prev-next span {

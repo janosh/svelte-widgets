@@ -21,6 +21,11 @@ describe(`ColumnPicker`, () => {
     }))
 
   const get_trigger = () => doc_query<HTMLButtonElement>(`.column-picker > button`)
+  const menu = () => document.querySelector<HTMLElement>(`.column-menu`)
+  const dismiss = () =>
+    menu()?.dispatchEvent(
+      Object.assign(new Event(`beforetoggle`), { newState: `closed` }),
+    )
   const checkbox_states = () =>
     Array.from(
       document.querySelectorAll<HTMLInputElement>(`input[type="checkbox"]`),
@@ -115,7 +120,6 @@ describe(`ColumnPicker`, () => {
       })
       await tick() // let bind:this land before the trigger's handler reads it
       const trigger = get_trigger()
-      const menu = () => document.querySelector<HTMLElement>(`.column-menu`)
       await click(trigger)
       expect(menu()?.getAttribute(`popover`)).toBe(`auto`)
       expect(trigger.popoverTargetElement).toBe(menu())
@@ -130,10 +134,64 @@ describe(`ColumnPicker`, () => {
       expect(trigger.getAttribute(`aria-expanded`)).toBe(`false`)
 
       await click(trigger)
-      menu()?.dispatchEvent(
-        Object.assign(new Event(`beforetoggle`), { newState: `closed` }),
-      )
+      dismiss()
       await tick()
+      expect(menu()).toBeNull()
+    })
+
+    // each cause of an open/close change, starting from the opposite state
+    test.each([
+      { initial: false, via: `trigger` },
+      { initial: false, via: `programmatic` },
+      { initial: true, via: `trigger` },
+      { initial: true, via: `programmatic` },
+      { initial: true, via: `dismiss` },
+    ] as const)(
+      `open=$initial reports $via exactly once and nothing on mount`,
+      async ({ initial, via }) => {
+        const [on_open, on_close] = [vi.fn(), vi.fn()]
+        const props = $state<Props>({
+          columns: make_columns(),
+          open: initial,
+          on_open,
+          on_close,
+        })
+        render(ColumnPicker, props)
+        await tick()
+        expect([on_open.mock.calls, on_close.mock.calls]).toEqual([[], []])
+
+        if (via === `trigger`) await click(get_trigger())
+        else if (via === `dismiss`) dismiss()
+        else props.open = !initial
+        await tick()
+
+        expect(props.open).toBe(!initial)
+        expect(menu() === null).toBe(initial)
+        const [fired, silent] = initial ? [on_close, on_open] : [on_open, on_close]
+        expect(fired).toHaveBeenCalledExactlyOnceWith({ via })
+        expect(silent).not.toHaveBeenCalled()
+      },
+    )
+
+    test(`an on_open that closes the menu again still reports the close`, async () => {
+      const events: unknown[] = []
+      const props: Props = $state({
+        columns: make_columns(),
+        open: false,
+        on_open: ({ via }: { via: string }) => {
+          events.push([`open`, via])
+          props.open = false
+        },
+        on_close: ({ via }: { via: string }) => events.push([`close`, via]),
+      })
+      render(ColumnPicker, props)
+      await tick()
+      await click(get_trigger())
+      await tick()
+      expect(events).toEqual([
+        [`open`, `trigger`],
+        [`close`, `programmatic`],
+      ])
       expect(menu()).toBeNull()
     })
 

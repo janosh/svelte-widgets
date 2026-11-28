@@ -201,14 +201,14 @@
           {
             'with-actions': ctx.settings.ui.node_actions !== false,
             'array-index': typeof node_key === `number`,
-            collapsed: expandable && is_collapsed,
+            collapsed: is_collapsed,
           },
         ]}
         tabindex="-1"
         onclick={stopped((event) => {
           if (event.ctrlKey || event.metaKey) ctx.toggle_select(path, event.shiftKey)
           else if (event.shiftKey) ctx.copy_path(path, event.currentTarget)
-          else if (expandable && is_collapsed) ctx.toggle_collapse(path, true)
+          else if (is_collapsed) ctx.toggle_collapse(path, true)
           else ctx.copy_value(path, value, event.currentTarget)
         })}
         onauxclick={copy_path_on_middle_click}

@@ -11,9 +11,8 @@ export type PositionOptions = {
   cross_axis_offset?: number // nudge perpendicular to the chosen side
   padding?: number // closest the floating box may come to a viewport edge
   boundary?: { top: number; left: number; right: number; bottom: number }
-  fallback_placements?: Placement[] // tried after a fixed placement; restricts `auto`
-  // true tries the opposite side then the perpendicular ones; an explicit list keeps e.g.
-  // a dropdown from ever landing beside its input
+  // true tries the opposite side then the perpendicular ones. A list is the sides `auto` picks
+  // from, or a named placement's fallbacks after it, so e.g. a dropdown never lands beside its input
   flip?: boolean | Placement[]
   // true slides along any viewport edge rather than overflow it. An edge list only clamps
   // against those edges: a dropdown passes [`top`] so it never slides up over its input
@@ -48,7 +47,6 @@ export function compute_position(
       right: globalThis.innerWidth,
       bottom: globalThis.innerHeight,
     },
-    fallback_placements,
     flip = true,
     shift = true,
   } = options
@@ -82,12 +80,12 @@ export function compute_position(
     Math.max(0, (vertical(side) ? floating.height : floating.width) - free_space[side])
 
   // `flip: false` pins the requested side, else least main-axis overflow wins. A named
-  // placement stays first choice, its fallbacks queue up behind it.
-  const explicit_order = fallback_placements ?? (Array.isArray(flip) ? flip : null)
+  // placement stays first choice, a `flip` list queuing up behind it.
+  const explicit_order = Array.isArray(flip) ? flip : null
   let candidates = explicit_order ?? FLIP_ORDER[requested]
   if (flip === false) candidates = [requested]
-  else if (fallback_placements && placement !== `auto`)
-    candidates = [requested, ...fallback_placements.filter((side) => side !== requested)]
+  else if (explicit_order && placement !== `auto`)
+    candidates = [requested, ...explicit_order.filter((side) => side !== requested)]
 
   // Plain `auto` breaks overflow ties above or below before beside (a tooltip beside a
   // trigger in a row of chips covers its neighbors), then on free space

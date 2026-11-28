@@ -26,4 +26,4 @@ Declarative keybindings over the same matcher `CommandMenu` uses. `mod` is Cmd o
 </ol>
 ```
 
-Pass `global: false` (the default) to scope a binding to the node it is attached to, so a shortcut dies with the surface that owns it.
+Bindings listen on the attached node by default, so a shortcut dies with the surface that owns it; `global: true` listens on the document. Each binding also takes `disabled`, and `prevent_default` (default `true`).

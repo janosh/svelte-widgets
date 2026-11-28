@@ -2,9 +2,9 @@
 
 `CommandMenu` renders a searchable option list with keyboard navigation, grouping, and async loading.
 
-It executes one command at a time and closes, without retaining a selection. Selection bindings (`value`), selection limits, chip controls, user-created options, bulk selection, and pasted option lists belong to [MultiSelect](multiselect). Use `on_execute={({ action }) => …}` to observe commands invoked by menu selection or global shortcut, and `on_activate` to track keyboard navigation. Replace the former `on_add` callback with `on_execute`; it reports invocation, without waiting for asynchronous actions to finish.
+It runs one command and closes, keeping no selection; `value` bindings, selection limits, chips, user-created options, bulk selection and pasted option lists belong to [MultiSelect](multiselect). `on_execute({ action })` (formerly `on_add`) reports each command invoked by menu selection or global shortcut, without waiting for async actions to finish, and `on_activate` tracks keyboard navigation. `on_open({ via })` and `on_close({ via })` report each change of `open` once: `shortcut` (a trigger combo or a non-Escape close key), `escape`, `pointer` (backdrop), `select` (running an action) or `programmatic` (the bound `open` or a direct `dialog.close()`); mounting reports nothing. `PageSearch` forwards both.
 
-Search, grouping, loading, and styling props share `OptionListProps` with [MultiSelect](multiselect). The `labels` prop accepts `loading_more`, `loading_failed`, `retry`, and `group` overrides to localize status messages and group buttons. `placeholder`, `no_matching_options_msg`, and `default_disabled_title` control their respective text separately.
+Search, grouping, loading, and styling props share `OptionListProps` with [MultiSelect](multiselect). `labels` overrides `loading_more`, `loading_failed`, `retry` and `group` to localize status messages and group buttons; `placeholder`, `no_matching_options_msg` and `default_disabled_title` set the remaining text.
 
 ```svelte example id="command-menu-basic"
 <script lang="ts">
@@ -27,7 +27,7 @@ Search, grouping, loading, and styling props share `OptionListProps` with [Multi
 
 ## `PageSearch`
 
-[`PageSearch`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/PageSearch.svelte) wraps [`CommandMenu`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/CommandMenu.svelte) with full-text search over statically generated pages. `fallback_actions` are matched locally on every keystroke, so known routes show up without waiting on the index. Failed index, search, or result downloads show a Retry button. Successful results remain visible, including those from a partially failed batch; Retry downloads only failed results and restores their search order. Install `pagefind` as a development dependency, then index the rendered site after the application build. Run this script before previewing or deploying:
+[`PageSearch`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/PageSearch.svelte) wraps [`CommandMenu`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/CommandMenu.svelte) with full-text search over statically generated pages. `fallback_actions` are matched locally on every keystroke, so known routes show up without waiting on the index. A failed index, search or result download shows a Retry button; results that did load stay visible, and Retry fetches only the failed ones, restoring their search order. Install `pagefind` as a dev dependency and index the rendered site after the app build, before previewing or deploying:
 
 ```json
 {
@@ -109,7 +109,7 @@ See the [`highlight_matches` attachments demo](attachments/highlight-matches) fo
 
 ## Shortcuts, Descriptions & Recent Actions
 
-Actions can carry a `description`, `metadata`, `badge`, `keywords`, `shortcut`, and `disabled` state. The default filter searches all visible fields plus `keywords` and supports multiple terms. Shortcuts render as <kbd>⌘</kbd>-style key hints and trigger globally while the menu is closed unless `global_shortcuts={false}`. Pass `recent_actions_key` to persist triggered actions to `localStorage` and rank them first when the menu reopens.
+Actions can carry a `description`, `metadata`, `badge`, `keywords`, `shortcut`, and `disabled` state. The default filter matches multiple terms against all visible fields plus `keywords`. Shortcuts render as <kbd>⌘</kbd>-style key hints and trigger globally while the menu is closed unless `global_shortcuts={false}`. Pass `recent_actions_key` to persist triggered actions to `localStorage` and rank them first when the menu reopens.
 
 ```svelte example id="command-menu-shortcuts"
 <script lang="ts">

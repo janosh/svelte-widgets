@@ -8,7 +8,7 @@ export type DismissDetail = {
 }
 
 export type DismissConfig = {
-  enabled?: boolean
+  disabled?: boolean
   // Outside regions that still count as inside: chiefly the trigger, whose own click
   // toggles the surface right after this runs, and portalled content. Prefer elements over
   // selectors where you hold a reference — they cannot collide with another instance.
@@ -76,14 +76,14 @@ export const dismiss_on_outside_press = (options: DismissOptions = {}): (() => v
   const {
     node,
     callback,
-    enabled = true,
+    disabled = false,
     inside = [],
     scope,
     escape = false,
     dismiss_on = `press`,
   } = options
 
-  if (!enabled) return () => {} // avoids registering an unused listener
+  if (disabled) return () => {} // avoids registering an unused listener
 
   const inside_nodes = [node, ...inside].filter((item) => item instanceof Element)
   // Empty entries would make the joined selector invalid and throw on every press

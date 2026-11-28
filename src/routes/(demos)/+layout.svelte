@@ -35,25 +35,21 @@
 </script>
 
 <main>
-  {#if category && current && current !== category.href}
+  {#if is_multiselect}
     <nav class="section-navigation" aria-label="Demo section" data-pagefind-ignore>
-      <a href={resolve_path(category.href)}>{category.label}</a>
-      {#if is_multiselect}
-        <span aria-hidden="true">/</span>
-        <select
-          aria-label="MultiSelect guide"
-          value={current}
-          onchange={(event) => goto(resolve_path(event.currentTarget.value))}
-        >
-          {#each multiselect_pages as route (route)}
-            <option value={route}
-              >{route === `/multiselect`
-                ? `MultiSelect overview`
-                : demo_title(route)}</option
-            >
-          {/each}
-        </select>
-      {/if}
+      <select
+        aria-label="MultiSelect guide"
+        value={current}
+        onchange={(event) => goto(resolve_path(event.currentTarget.value))}
+      >
+        {#each multiselect_pages as route (route)}
+          <option value={route}
+            >{route === `/multiselect`
+              ? `MultiSelect overview`
+              : demo_title(route)}</option
+          >
+        {/each}
+      </select>
     </nav>
   {/if}
   {@render children?.()}
@@ -66,13 +62,9 @@
 
 <style>
   .section-navigation {
-    display: flex;
-    align-items: center;
-    gap: 0.6em;
     margin: 0 auto 1.5em;
     width: min(100%, var(--main-max-width));
     select {
-      min-width: 0;
       max-width: 100%;
       font: inherit;
       padding: 0.3em 0.5em;
@@ -80,5 +72,10 @@
   }
   main > :global(h2) {
     margin-top: 2em;
+  }
+  /* the page title, level with the TOC title beside it */
+  main > :global(h2:first-child),
+  .section-navigation + :global(h2) {
+    margin-top: 0.5em;
   }
 </style>

@@ -55,7 +55,7 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
     }
   }
   const drain = async (): Promise<void> => {
-    while (queue_head < queue.length) await queue[queue_head++]?.run()
+    while (queue_head < queue.length) await queue[queue_head++].run()
     queue = []
     queue_head = 0
   }

@@ -1,6 +1,6 @@
 ## Disabled MultiSelect
 
-Toggle the checkbox to enable/disable the component. When disabled, it shows a custom icon and tooltip.
+While disabled, the component shows a custom `disabled_icon` and, on hover, `disabled_input_title`.
 
 ```svelte example id="disabled-input-title"
 <script lang="ts">
@@ -30,5 +30,3 @@ Toggle the checkbox to enable/disable the component. When disabled, it shows a c
 
 <p style="margin-top: 0.5em">Selected: {selected.join(', ')}</p>
 ```
-
-The mouse tooltip will show `disabled_input_title` when hovering the disabled component.

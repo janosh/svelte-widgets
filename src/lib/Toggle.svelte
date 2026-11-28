@@ -48,11 +48,11 @@
     width: var(--toggle-knob-width, 3em);
     padding: var(--toggle-knob-padding, 0.1em);
     border: var(--toggle-knob-border, 1px solid light-dark(lightgray, #555));
-    border-radius: var(--toggle-knob-border-radius, 0.75em);
+    border-radius: var(--toggle-knob-radius, 0.75em);
     transition: var(--toggle-knob-transition, 0.3s);
   }
   input:checked + span {
-    background: var(--toggle-background, light-dark(#222, #555));
+    background: var(--toggle-bg, light-dark(#222, #555));
   }
   input {
     position: absolute;
@@ -64,8 +64,8 @@
     display: var(--toggle-knob-after-display, block);
     height: var(--toggle-knob-after-height, 1.2em);
     width: var(--toggle-knob-after-width, 1.2em);
-    border-radius: var(--toggle-knob-after-border-radius, 50%);
-    background: var(--toggle-knob-after-background, light-dark(gray, #888));
+    border-radius: var(--toggle-knob-after-radius, 50%);
+    background: var(--toggle-knob-after-bg, light-dark(gray, #888));
     transition: var(--toggle-knob-after-transition, 0.3s);
   }
   input:checked + span::after {
@@ -76,7 +76,7 @@
       var(--toggle-knob-width, 3em) - 2 * var(--toggle-knob-padding, 0.1em) - 2px -
         var(--toggle-knob-after-width, 1.2em)
     );
-    background: var(--toggle-knob-after-background, light-dark(green, #4ade80));
+    background: var(--toggle-knob-after-bg, light-dark(green, #4ade80));
     transform: var(--toggle-knob-after-transform, translate(var(--checked-offset)));
   }
   /* in RTL the unchecked knob starts at the track's right edge, so the checked

@@ -9,7 +9,8 @@
   import { merge_defaults } from '../labels'
   import Popover from '../Popover.svelte'
   import { COLUMN_PICKER_LABELS, type ColumnPickerLabels } from './labels'
-  import type { TableColumn } from './types'
+  import { track_open } from '../internal/open-state.svelte.ts'
+  import type { ColumnPopoverCloseVia, ColumnPopoverOpenVia, TableColumn } from './types'
 
   // Show/hide menu for table columns (or any toggleable items): a trigger button opening an
   // anchored native popover of checkboxes, sectioned by `group`, searchable when long, with
@@ -26,6 +27,8 @@
     search_text = (col: Col) =>
       [col.id, col.label, col.description, col.group].filter(Boolean).join(` `),
     on_toggle,
+    on_open,
+    on_close,
     trigger,
     header,
     toggle_label,
@@ -49,6 +52,10 @@
     search_text?: (column: Col) => string
     // every visibility change, resets included, for hosts tracking it outside `visible`
     on_toggle?: (column: Col, visible: boolean) => void
+    // each open/close change once, not on mount: the trigger, `dismiss` (outside click,
+    // Escape, another popover opening) or `programmatic` for a bound `open` change
+    on_open?: (detail: { via: ColumnPopoverOpenVia }) => void
+    on_close?: (detail: { via: ColumnPopoverCloseVia }) => void
     // replaces the default icon + label; the button around it keeps owning the click
     trigger?: Snippet<[{ open: boolean; changed: boolean }]>
     // extra controls beside the search box, above the column list
@@ -58,6 +65,13 @@
     // hover-popover content for columns with a `description`; defaults to the text
     description?: Snippet<[{ column: Col }]>
   } = $props()
+
+  const change_open = track_open<ColumnPopoverOpenVia, ColumnPopoverCloseVia>(
+    () => open,
+    (value) => (open = value),
+    () => on_open,
+    () => on_close,
+  )
 
   const msg = $derived(merge_defaults(COLUMN_PICKER_LABELS, labels))
   let query = $state(``)
@@ -181,7 +195,7 @@ overflow and stacking contexts, and the browser owns light dismiss and Escape --
     class={[`trigger`, { custom: Boolean(trigger) }]}
     aria-expanded={open}
     aria-label={trigger ? msg.trigger : undefined}
-    onclick={() => (open = !open)}
+    onclick={() => change_open(!open, `trigger`)}
   >
     {#if trigger}
       {@render trigger({ open, changed: has_any_changes })}
@@ -199,7 +213,10 @@ overflow and stacking contexts, and the browser owns light dismiss and Escape --
       role="group"
       aria-label={msg.trigger}
       out:close_before_removal
-      {@attach anchored_popover({ anchor: trigger_el, on_close: () => (open = false) })}
+      {@attach anchored_popover({
+        anchor: trigger_el,
+        on_close: () => change_open(false, `dismiss`),
+      })}
     >
       {#if header || show_search}
         <div class="menu-header">
@@ -298,15 +315,9 @@ overflow and stacking contexts, and the browser owns light dismiss and Escape --
     overflow: auto;
     padding: var(--column-picker-menu-padding, 3pt 5pt);
     background: var(--column-picker-menu-bg, var(--page-bg, Canvas));
-    border: var(
-      --column-picker-menu-border,
-      1px solid color-mix(in srgb, currentColor 10%, transparent)
-    );
+    border: var(--column-picker-menu-border, 1px solid light-dark(lightgray, #555));
     border-radius: var(--column-picker-radius, 4pt);
-    box-shadow: var(
-      --column-picker-menu-shadow,
-      0 4px 12px color-mix(in srgb, currentColor 8%, transparent)
-    );
+    box-shadow: var(--column-picker-menu-shadow, 0 3px 12px rgba(0, 0, 0, 0.3));
     color: inherit; /* not the UA [popover] CanvasText */
     &.grouped {
       display: flex;

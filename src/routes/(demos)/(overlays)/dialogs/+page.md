@@ -4,16 +4,14 @@ A promise-based prompt queue and three headless DOM helpers that go with it.
 
 ### `request_choice` and `ConfirmDialog`
 
-`request_choice(message, title, choices, dismiss_id)` returns a promise that resolves to the id of the choice the user picked, so asking a question reads like a function call instead of a callback dance. Mount one `ConfirmDialog` high in the tree and any code below it can ask.
+`request_choice(body, title, choices, dismiss_id)` returns a promise that resolves to the id of the picked choice, so asking a question reads like a function call. Mount one `ConfirmDialog` high in the tree and any code below it can ask.
 
-Two details carry their weight:
-
-- **Requests queue rather than overlap.** Two prompts racing in one modal would leave the second answered by a click meant for the first, so only the head of the queue is on screen and the buttons are rebuilt between questions. Press _Ask both at once_ below and answer fast to see the second question survive a double-click.
+- **Requests queue rather than overlap.** Only the head of the queue is on screen and the buttons are rebuilt between questions, so a click meant for one prompt cannot answer the next. Press _Ask both at once_ below and answer fast to see the second question survive a double-click.
 - **`dismiss_id` decides what Escape means.** A dismissal resolves with that id, never with the accented choice, so a stray keypress is never read as consent.
 
-Choices are arbitrary in number. `ask_confirm(body, title, confirm_label = 'OK')` is the two-button shorthand and resolves to a boolean. A body can be text or a trusted Svelte snippet. `ask_prompt(body, title, options)` adds a text field, returns `string | null` and keeps the dialog open when its validator returns an error message. Configure the shared prompt field with `input_props` on `ConfirmDialog`; these attributes apply to every prompt, request-specific placeholders win when set, and `oninput` chains so validation still clears.
+Any number of choices works. `ask_confirm(body, title, confirm_label = 'OK', cancel_label = 'Cancel')` is the two-button shorthand and resolves to a boolean. A body can be text or a trusted Svelte snippet. `ask_prompt(body, title, options)` adds a text field, returns `string | null` and keeps the dialog open while its validator returns an error message. `input_props` on `ConfirmDialog` applies to every prompt's field; a request's own placeholder wins when set, and `oninput` chains so validation still clears.
 
-`ConfirmDialog`, `CommandMenu`, and `Dialog` use native modal dialogs with `closedby` for Escape and backdrop dismissal; the browser owns top-layer stacking, modality, and light-dismiss ordering. Their backdrop dims the page by default; set `backdrop_dim={false}` to disable it or `backdrop_blur` to opt into blur. The existing `--*-backdrop` and `--*-backdrop-filter` CSS variables control intensity.
+`ConfirmDialog`, `CommandMenu` and `Dialog` are native modal dialogs using `closedby` for Escape and backdrop dismissal, so the browser owns top-layer stacking, modality and light-dismiss order. The backdrop dims by default: `backdrop_dim={false}` turns that off, `backdrop_blur` adds blur, and the `--*-backdrop` and `--*-backdrop-filter` CSS variables set their intensity.
 
 ```svelte example id="confirm-dialog-demo"
 <script lang="ts">
@@ -98,7 +96,7 @@ Choices are arbitrary in number. `ask_confirm(body, title, confirm_label = 'OK')
 
 ### `print_page`
 
-Print the current page with an optional suggested PDF filename. The helper temporarily sets `document.title` and restores it after printing, cancellation, or an error. Use your own `@media print` CSS to control visible content and pagination.
+Prints the page with an optional suggested PDF filename, temporarily setting `document.title` and restoring it after printing, cancellation or an error. Control visible content and pagination with your own `@media print` CSS.
 
 ```svelte example id="print-page-demo"
 <script lang="ts">
@@ -115,7 +113,7 @@ Print the current page with an optional suggested PDF filename. The helper tempo
 
 ### `create_clipboard_feedback`
 
-Reactive "recently copied" state keyed by string, for UIs that render their own copy affordances and only need the state `CopyButton` keeps internally. Each key runs its own timer, and re-copying a key restarts that timer so the checkmark cannot blink out early.
+`create_clipboard_feedback(duration_ms = 1000, on_error?)` returns reactive "recently copied" state keyed by string, for UIs that render their own copy affordances where `CopyButton`'s markup is in the way. Each key runs its own timer, and re-copying a key restarts it so the checkmark cannot blink out early. Without `on_error`, a failed write throws. For a one-off copy with a toast beside the anchor, call `copy_text(text, { anchor })` from `svelte-widgets/browser` instead.
 
 ```svelte example id="clipboard-feedback-demo"
 <script lang="ts">
@@ -163,7 +161,7 @@ Reactive "recently copied" state keyed by string, for UIs that render their own 
 
 ### `files_from_data_transfer`
 
-`DataTransfer.files` stops at the top level: drop a directory and it reports a single zero-byte file named after the directory. This walks the drop with `webkitGetAsEntry` instead, expanding directories depth-first (draining `readEntries`, which hands back at most 100 children per call), and falls back to the flat file list when the entry API yields nothing. It rejects rather than returning a partial list when a tree nests past 32 levels or expands past 20 000 directories — the entry API resolves symlinks, so a link to an ancestor would otherwise recurse without end — which is why the handler below catches.
+`DataTransfer.files` stops at the top level: a dropped directory shows up as one zero-byte file. This walks the drop with `webkitGetAsEntry` instead, expanding directories depth-first (draining `readEntries`, which returns at most 100 children per call), and falls back to the flat file list when the entry API yields nothing. It rejects rather than returning a partial list when a tree nests past 32 levels or expands past 20 000 directories (the entry API resolves symlinks, so a link to an ancestor would recurse forever), hence the `try` in the handler below.
 
 ```svelte example id="file-drop-demo"
 <script lang="ts">

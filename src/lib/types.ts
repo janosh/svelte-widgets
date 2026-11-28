@@ -88,6 +88,23 @@ export type CmdSection<Action extends CmdAction = CmdAction> = {
   selected?: string | null
 }
 
+// What opened or closed a CommandMenu (or PageSearch): `shortcut` a trigger key combo or a
+// non-Escape close key, `escape` Escape, `pointer` a backdrop click, `select` running an
+// action, `programmatic` a change to the bound `open` or a direct dialog.close()
+export type CommandMenuOpenVia = `shortcut` | `programmatic`
+export type CommandMenuCloseVia = CommandMenuOpenVia | `escape` | `pointer` | `select`
+
+// What opened or closed an ActionMenu: `trigger` the dropdown trigger, `contextmenu` a
+// right-click, `pointer` a press outside, `select` choosing an item, `tab` Tab leaving the
+// menu, `programmatic` a change to the bound `open`/`at`, a `disabled` flip or hidePopover()
+export type ActionMenuOpenVia = `trigger` | `contextmenu` | `programmatic`
+export type ActionMenuCloseVia =
+  | Exclude<ActionMenuOpenVia, `contextmenu`>
+  | `escape`
+  | `pointer`
+  | `select`
+  | `tab`
+
 export type PageSearchNavigateDetails = {
   query: string
   label: string
@@ -119,10 +136,21 @@ export type MultiSelectCloseVia =
   | `trigger`
   | `disabled`
 
+// What opened the dropdown: `pointer` a click on the already focused input or the component
+// outside it, `trigger` the expand icon, `focus` focusing the input (also
+// programmatically), `keyboard` Enter or an arrow key, `input` typing, `shortcut` the `open` hotkey
+export type MultiSelectOpenVia =
+  | `pointer`
+  | `trigger`
+  | `focus`
+  | `keyboard`
+  | `input`
+  | `shortcut`
+
 export interface MultiSelectEvents<
   T extends Option = Option,
 > extends OptionListEvents<T> {
-  on_open?: () => unknown
+  on_open?: (data: { via: MultiSelectOpenVia }) => unknown
   on_close?: (data: { via: MultiSelectCloseVia }) => unknown
   on_add?: (data: { option: T; selected: T[] }) => unknown
   on_create?: (data: {
@@ -191,8 +219,8 @@ type InputSnippetProps<T extends Option = Option> = Pick<
 > & { selected: T[]; placeholder: string | null }
 type UserMsgProps = {
   search_text: string
-  msg_type: false | `dupe` | `create` | `no-match`
-  msg: null | string
+  msg_type: `dupe` | `create` | `no-match`
+  msg: string
 }
 export type GroupHeaderProps<T extends Option = Option> = {
   group: string
@@ -255,6 +283,11 @@ export interface SelectAllDisabledState {
 
 type InputEventProp = Extract<keyof HTMLInputAttributes, `on${string}`>
 export type InputProps = Omit<HTMLInputAttributes, InputEventProp>
+// attributes for an inner element; event handlers stay internal since the component's own win
+export type ElementProps<E extends EventTarget> = Omit<
+  HTMLAttributes<E>,
+  Extract<keyof HTMLAttributes<E>, `on${string}`>
+>
 
 export interface OptionListProps<T extends Option = Option>
   extends
@@ -275,15 +308,14 @@ export interface OptionListProps<T extends Option = Option>
   highlight_matches?: boolean
   id?: string | null
   input?: HTMLInputElement | null
-  input_class?: ClassValue
   input_props?: InputProps
-  input_style?: string | null
   inputmode?: HTMLInputAttributes[`inputmode`] | null
   // i18n overrides, shallow-merged over MULTI_SELECT_LABELS (see labels.ts)
   labels?: Partial<MultiSelectLabels>
+  // class for the keyboard-active option row: a state, which li_option_props can't express
   li_active_option_class?: ClassValue
-  li_option_class?: ClassValue
-  li_option_style?: string | null
+  // `style` merges after each option's own `style` field
+  li_option_props?: ElementProps<HTMLLIElement>
   loading?: boolean
   matching_options?: T[]
   max_options?: number | undefined
@@ -294,13 +326,11 @@ export interface OptionListProps<T extends Option = Option>
   no_matching_options_msg?: string
   options?: T[] // static options, or omit when using load_options
   outer_div?: HTMLDivElement | null
-  outer_div_class?: ClassValue
   pattern?: string | null
   placeholder?: string | PlaceholderConfig | null
   search_text?: string
   style?: string | null
-  ul_options_class?: ClassValue
-  ul_options_style?: string | null
+  ul_options_props?: ElementProps<HTMLUListElement>
   load_options?: LoadOptions<T>
   load_error?: Error | null // bindable, cleared on retry or a new search
   // Option grouping feature (https://github.com/janosh/svelte-widgets/issues/135)
@@ -313,8 +343,7 @@ export interface OptionListProps<T extends Option = Option>
   search_matches_groups?: boolean // include group name in search matching
   keyboard_expands_collapsed_groups?: boolean // auto-expand collapsed groups when navigating with arrow keys
   sticky_group_headers?: boolean // keep group headers visible at top when scrolling
-  li_group_header_class?: ClassValue // CSS class for group header <li>
-  li_group_header_style?: string | null // inline style for group headers
+  li_group_header_props?: ElementProps<HTMLLIElement>
   // Programmatic group control (exposed via bindable)
   collapse_all_groups?: () => void
   expand_all_groups?: () => void
@@ -356,12 +385,13 @@ interface MultiSelectBaseProps<T extends Option = Option>
   // keep selected options in the dropdown, marked either by a left border and background
   // ('plain') or a checkbox prefix ('checkboxes')
   keep_selected_in_dropdown?: false | `plain` | `checkboxes`
+  // `style` merges after each option's own `selected` style
+  li_selected_props?: ElementProps<HTMLLIElement>
+  li_user_msg_props?: ElementProps<HTMLLIElement>
+  // class for the user message row while it is keyboard-active
   li_active_user_msg_class?: ClassValue
-  li_selected_class?: ClassValue
-  li_selected_style?: string | null
-  li_user_msg_class?: ClassValue
   max_select_msg?: ((current: number, max: number) => string) | null
-  max_select_msg_class?: ClassValue
+  max_select_msg_props?: ElementProps<HTMLSpanElement>
   // Chips rendered before the rest collapse into a "+N more" toggle; null (default) renders
   // all. Ignored for selected_display="input"; keyboard chip navigation auto-expands.
   max_visible_chips?: number | null
@@ -372,13 +402,12 @@ interface MultiSelectBaseProps<T extends Option = Option>
   sort_selected?: boolean | ((op1: T, op2: T) => number)
   selected_options_draggable?: boolean
   range_select?: boolean
-  ul_selected_class?: ClassValue
-  ul_selected_style?: string | null
+  ul_selected_props?: ElementProps<HTMLUListElement>
   // Select all feature
   select_all_option?: boolean | string // enable select all; if string, use as label
   select_all_scope?: SelectAllScope
   select_all_disabled_title?: string | ((state: SelectAllDisabledState) => string) | null
-  li_select_all_class?: ClassValue // CSS class for the select all <li>
+  li_select_all_props?: ElementProps<HTMLLIElement>
   // flip animation for selected options; { duration: 0 } disables
   // (https://github.com/janosh/svelte-widgets/issues/356)
   selected_flip_params?: FlipParams
@@ -434,25 +463,20 @@ type NavDetails = Omit<LinkItem, `href`> & {
 export type NavLink = NavDetails & { href: string; children?: never; section?: string }
 // Omit href for a heading without a destination; children contain only submenu links.
 export type NavGroup = NavDetails & { href?: string; children: readonly NavLink[] }
+// What opened or closed Nav's mobile menu: `trigger` the burger button, `pointer` a press
+// outside, `select` a followed link, `programmatic` a change to the bound `open`
+export type NavOpenVia = `trigger` | `programmatic`
+export type NavCloseVia = NavOpenVia | `escape` | `pointer` | `select`
 export type NavRoute =
   | ((NavLink | NavGroup) & { align?: `left` | `right`; separator?: false })
   | { separator: true }
 
 // === Toc ===
 export type CollapseMode = boolean | `h${2 | 3 | 4 | 5 | 6}`
-export type OpenChangeVia =
-  | `button`
-  | `escape`
-  | `outside-click`
-  | `programmatic`
-  | `tab`
-  | `toc-item`
-export type OpenChangeEvent = {
-  open: boolean
-  desktop: boolean
-  via: OpenChangeVia
-}
-export type OpenChangeHandler = (event: OpenChangeEvent) => void
+// What opened or closed the mobile ToC: `trigger` the toggle button, `pointer` a click
+// outside, `select` a ToC item, `programmatic` a change to the bound `open`
+export type TocOpenVia = `trigger` | `programmatic`
+export type TocCloseVia = TocOpenVia | `escape` | `pointer` | `tab` | `select`
 export type TocHeadingData = { id: string; level: number; title: string }
 
 // === Footer ===
@@ -479,6 +503,16 @@ export type TreeNode = {
   load?: (signal: AbortSignal) => Promise<readonly TreeNode[]>
   disabled?: boolean
 }
+
+// What opened or closed a Popover: `trigger` a click on it or a hover/focus enter/leave,
+// `pointer` a press outside, `programmatic` a change to the bound `open`
+export type PopoverOpenVia = `trigger` | `programmatic`
+export type PopoverCloseVia = PopoverOpenVia | `pointer` | `escape`
+
+// What opened or closed a DraggablePane: `trigger` its toggle button, `close` the pane's
+// close button, `pointer` a press outside, `programmatic` a change to the bound `open`
+export type DraggablePaneOpenVia = `trigger` | `programmatic`
+export type DraggablePaneCloseVia = DraggablePaneOpenVia | `close` | `pointer` | `escape`
 
 // Attributes Popover hands its `trigger` snippet to spread, so consumers keep their own markup
 export type PopoverTriggerProps = {

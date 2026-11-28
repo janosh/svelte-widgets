@@ -292,6 +292,147 @@ describe(`ActionMenu`, () => {
     if (`open` in props) expect(props.open).toBe(false) // bind:open hears the close
   })
 
+  // records open/close reports in order, so a test sees each change exactly once
+  const track_reports = () => {
+    const reports: [`open` | `close`, string][] = []
+    return {
+      reports,
+      on_open: ({ via }: { via: string }) => reports.push([`open`, via]),
+      on_close: ({ via }: { via: string }) => reports.push([`close`, via]),
+    }
+  }
+  const custom_dismiss: MenuProps = { dismiss: { dismiss_on: `press` } }
+  const on_body = (make_event: () => Event) => () =>
+    document.body.dispatchEvent(make_event())
+  const hide_popover = () => doc_query(`menu`).hidePopover()
+  // native light-dismiss is emulated by the input that precedes it, then hidePopover()
+  const native_dismiss = (make_event: () => Event) => () => {
+    on_body(make_event)()
+    hide_popover()
+  }
+  test.each([
+    [`select`, {}, () => click(items()[0])],
+    [`tab`, {}, () => press_key(doc_query(`menu`), `Tab`)],
+    [`escape`, custom_dismiss, on_body(escape_key)],
+    [`pointer`, custom_dismiss, on_body(outside_press)],
+    [`pointer`, {}, on_body(secondary_press)],
+    [`escape`, {}, native_dismiss(escape_key)],
+    [`pointer`, {}, native_dismiss(outside_press)],
+    [`programmatic`, {}, hide_popover],
+    // inputs that dismiss nothing leave no stale cause for a later hidePopover()
+    [
+      `programmatic`,
+      {},
+      () => {
+        doc_query(`menu`).dispatchEvent(outside_press())
+        hide_popover()
+      },
+    ],
+    [
+      `programmatic`,
+      {},
+      native_dismiss(() => new KeyboardEvent(`keydown`, { key: `a`, bubbles: true })),
+    ],
+    [
+      `programmatic`,
+      { disabled: false },
+      (props: MenuProps) => Object.assign(props, { disabled: true }),
+    ],
+    [`programmatic`, {}, (props: MenuProps) => Object.assign(props, { at: null })],
+  ] as const)(
+    `a context menu reports via=%s once (props %j)`,
+    async (via, extra, act) => {
+      const { reports, on_open, on_close } = track_reports()
+      const props = mount_menu(make_actions(), { ...extra, on_open, on_close })
+      right_click(document.body)
+      await flush_context_open()
+      right_click(document.body, 10, 20) // moving an open menu is no new open
+      await flush_context_open()
+      expect([doc_query(`menu`).style.left, reports]).toEqual([
+        `10px`,
+        [[`open`, `contextmenu`]],
+      ])
+
+      await act(props)
+      await tick()
+      expect(menu()).toBeNull()
+      expect(reports).toEqual([
+        [`open`, `contextmenu`],
+        [`close`, via],
+      ])
+    },
+  )
+
+  test.each([false, true])(
+    `mounting reports nothing, a bound change reports programmatic (initially open: %s)`,
+    async (initially_open) => {
+      const { reports, on_open, on_close } = track_reports()
+      const context = mount_menu(make_actions(), {
+        at: initially_open ? { x: 1, y: 2 } : null,
+        on_open,
+        on_close,
+      })
+      const dropdown = $state({
+        actions: make_actions(),
+        open: initially_open,
+        on_open,
+        on_close,
+      })
+      render(TestActionMenu, dropdown)
+      await tick()
+      expect(reports).toEqual([])
+
+      context.at = initially_open ? null : { x: 3, y: 4 }
+      dropdown.open = !initially_open
+      await tick()
+      const kind = initially_open ? `close` : `open`
+      expect(reports).toEqual([
+        [kind, `programmatic`],
+        [kind, `programmatic`],
+      ])
+    },
+  )
+
+  test(`the trigger reports both ways, and a callback flipping the state back reports too`, async () => {
+    const { reports, on_open, on_close } = track_reports()
+    let bounce = true
+    const props = $state({
+      actions: make_actions(),
+      open: false,
+      on_open: (detail: { via: string }) => {
+        on_open(detail)
+        if (bounce) props.open = false
+      },
+      on_close: (detail: { via: string }) => {
+        on_close(detail)
+        if (detail.via === `select`) props.open = true
+      },
+    })
+    render(TestActionMenu, props)
+    const trigger = doc_query<HTMLButtonElement>(`[data-testid="action-menu-trigger"]`)
+
+    await click(trigger) // on_open closes it again
+    await tick()
+    expect(props.open).toBe(false)
+    bounce = false
+    await click(trigger)
+    await click(trigger)
+    await click(trigger)
+    await click(items()[0]) // on_close reopens it
+    await tick()
+
+    expect(props.open).toBe(true)
+    expect(reports).toEqual([
+      [`open`, `trigger`],
+      [`close`, `programmatic`],
+      [`open`, `trigger`],
+      [`close`, `trigger`],
+      [`open`, `trigger`],
+      [`close`, `select`],
+      [`open`, `programmatic`],
+    ])
+  })
+
   describe(`sections`, () => {
     const make_sections = (): CmdSection[] => [
       {

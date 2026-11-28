@@ -156,7 +156,7 @@
     max-width: var(--breadcrumbs-item-max-width, 20em);
     padding: var(--breadcrumbs-item-padding, 0.1em 0.3em);
     border: none;
-    border-radius: var(--breadcrumbs-item-border-radius, 4px);
+    border-radius: var(--breadcrumbs-item-radius, 4px);
     background: none;
     color: var(--breadcrumbs-color, var(--text-color-muted, inherit));
     font: inherit;

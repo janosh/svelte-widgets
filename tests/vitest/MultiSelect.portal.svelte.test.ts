@@ -199,7 +199,7 @@ test(`toggling portal.active at runtime portals and un-portals the dropdown`, as
     options: [1, 2, 3],
     open: true,
     portal: {}, // omitted `active` must stay in place, not position it as if portalled
-    ul_options_style: `width: 20em`,
+    ul_options_props: { style: `width: 20em` },
   })
   mount_multiselect(props)
   await tick()
@@ -227,7 +227,7 @@ test(`toggling portal.active at runtime portals and un-portals the dropdown`, as
   expect(document.querySelector(`body > ul.options`)).toBeNull()
   const back_inside = doc_query<HTMLUListElement>(`div.multiselect ul.options`)
   // portal-only inline styles must be cleared so component CSS applies again, while the
-  // host's own ul_options_style width the portal overrode comes back
+  // host's own ul_options_props.style width the portal overrode comes back
   expect(back_inside.style.position).toBe(``)
   expect(back_inside.style.width).toBe(`20em`)
   expect(back_inside.dataset.placement).toBeUndefined()

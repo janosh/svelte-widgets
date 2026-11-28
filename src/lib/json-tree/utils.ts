@@ -195,7 +195,11 @@ export function format_preview(value: unknown, max_length = 50): string {
 
 // Case-insensitive match of query against a node's key or its displayed leaf text. Paths
 // are not matched: every descendant of a matching key (and of the root label) would match.
-export function matches_search(key: NodeKey, value: unknown, query: string): boolean {
+export function node_matches_search(
+  key: NodeKey,
+  value: unknown,
+  query: string,
+): boolean {
   if (!query) return false
   const lower_query = query.toLowerCase()
   if (key !== null && String(key).toLowerCase().includes(lower_query)) return true
@@ -250,7 +254,7 @@ export function find_matching_paths(
   const matches: string[] = []
   if (!query) return matches
   walk_tree(value, current_path, sort_keys, (val, path, key) => {
-    if (matches_search(key, val, query)) matches.push(path)
+    if (node_matches_search(key, val, query)) matches.push(path)
     return true
   })
   return matches

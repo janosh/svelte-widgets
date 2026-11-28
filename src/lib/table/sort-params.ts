@@ -1,5 +1,4 @@
-// A multi-column TableSort[] <-> one `?sort=` query param (or another `key`, for several
-// tables on one page): column ids in priority order, comma-separated, a leading `-` marking
+// A multi-column TableSort[] <-> one query param such as `?sort=`: column ids in priority order, comma-separated, a leading `-` marking
 // descending (`?sort=-energy,force`). `?sort=` (empty) is an explicitly unsorted table; a
 // missing param means the default sort.
 import type { QueryParams, UrlParamEntry } from '../browser/url-params'
@@ -28,11 +27,9 @@ const sort_to_param = (sort: readonly TableSort[]): string =>
 // as a whole rather than keeping a partial sort the link's author never saw.
 export function sort_from_param(
   params: QueryParams,
+  key: string,
   default_sort: readonly TableSort[],
-  {
-    valid_columns,
-    key = `sort`,
-  }: { valid_columns?: ReadonlySet<string>; key?: string } = {},
+  valid_columns?: ReadonlySet<string>,
 ): TableSort[] {
   const value = params.get(key)
   if (value === null) return copy(default_sort)
@@ -55,7 +52,7 @@ export function sort_from_param(
 
 // Throws for column ids the encoding can't represent (empty, containing `,`, leading `-`).
 export const sort_url_entry = (
+  key: string,
   sort: readonly TableSort[],
   default_sort: readonly TableSort[],
-  key = `sort`,
 ): UrlParamEntry => [key, sort_to_param(sort), sort_to_param(default_sort)]

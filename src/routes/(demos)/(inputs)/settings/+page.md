@@ -1,6 +1,6 @@
 ## Settings
 
-Four components for building a settings panel out of plain markup. They coordinate through the DOM rather than a shared store, so rows stay ordinary `<label>`s and the pane keeps owning its own state:
+Four components for building a settings panel from plain markup. They coordinate through the DOM rather than a shared store, so rows stay ordinary `<label>`s and the pane owns its state:
 
 ```svelte
 <script>
@@ -13,15 +13,15 @@ Four components for building a settings panel out of plain markup. They coordina
 </script>
 ```
 
-A row opts into per-row reset and filtering by carrying `data-key`. Direct `label` and `.setting` children without `data-key` are also searchable; other section content still renders but is not indexed.
+A row opts into per-row reset and filtering with `data-key`. Direct `label` and `.setting` children without `data-key` are also searchable; other section content renders but is not indexed.
 
 `SettingsGroup` collapses by default. With `collapsible={false}` it is an always-open, unframed group headed by its title, for a few labeled control groups in a panel. Either way its controls sit in a `<fieldset>` named by the title, so `disabled` turns off the whole group.
 
 ### `SettingsSearch`
 
-Filters the rows below it as you type, hiding sections and groups that hold no match and expanding the groups that do. Clearing the query puts every group back the way the user left it. A row matches on its own text, its `data-label` and `data-description`, or on the title of any section or group above it — so typing a heading name reveals what it holds.
+Filters the rows below it as you type, hiding sections and groups without a match and expanding the groups with one. Clearing the query restores every group as the user left it. A row matches on its own text, its `data-label` and `data-description`, or the title of any section or group above it, so typing a heading name reveals its contents.
 
-`trigger` picks the chrome. The default `inline` keeps a labeled field in flow; `icon` parks a magnifier in the pane's top-right corner and expands it in place on click, for panes with no room to spare. Escape clears the query and, in `icon` mode, collapses the field and returns focus to the magnifier.
+`trigger` picks the chrome: the default `inline` keeps a labeled field in flow; `icon` parks a magnifier in the pane's top-right corner and expands it in place on click, for cramped panes. Escape clears the query and, in `icon` mode, collapses the field and refocuses the magnifier.
 
 ```svelte example id="settings-search"
 <script lang="ts">
@@ -90,15 +90,15 @@ Filters the rows below it as you type, hiding sections and groups that hold no m
 </div>
 ```
 
-Try `camera` to match a group by its title alone, or `inertia` to match a row by its description. The component never writes `hidden` — it marks filtered rows with `data-search-hidden`, so a row the surrounding app hides stays hidden and clearing the query does not drag it back into view.
+Try `camera` to match a group by its title, or `inertia` to match a row by its description. Filtered rows get `data-search-hidden`, never `hidden`, so a row the app hides itself stays hidden when the query clears.
 
 ### `SettingsSection`
 
-A titled region that displays reset controls for caller-supplied `changed_keys`. The caller owns values, defaults, and equality. Keyed rows reserve a reset gutter from the start; changed rows show a reset arrow. `on_reset_key(key)` restores one setting. The heading Reset button calls `on_reset`, or resets each changed key when that callback is omitted.
+A titled region with reset controls for caller-supplied `changed_keys`; the caller owns values, defaults and equality. Keyed rows reserve a reset gutter from the start and show a reset arrow once changed. `on_reset_key(key)` restores one setting. The heading Reset button calls `on_reset`, or `on_reset_key` for each changed key when `on_reset` is omitted.
 
-Each keyed row supplies its description through `data-description`, used by both Explain and SettingsSearch. Bind that attribute directly to a schema description when needed.
+A keyed row's `data-description` feeds both the Explain toggle (`bind:descriptions_open`) and SettingsSearch.
 
-`layout="grid"` puts every row on one shared `[label] [value] [wide control]` rhythm so controls line up down the section instead of starting wherever each label ends. A row holding just a label and a checkbox (bare, or alone in a wrapper element) needs no full line: consecutive ones pack into columns at least `--settings-pack-min` (default `8.5em`) wide, box first, and span again while their description shows. Fieldset rows such as `ColorInput` put their legend in the label track.
+`layout="grid"` (default `flow`) puts every row on one `[label] [value] [wide control]` rhythm so controls line up down the section instead of starting wherever each label ends. Rows holding just a label and a checkbox (bare, or alone in a wrapper) pack into columns at least `--settings-pack-min` (default `8.5em`) wide, box first, and span the full line again while their description shows. Fieldset rows such as `ColorInput` put their legend in the label track.
 
 ```svelte example id="settings-section"
 <script lang="ts">
@@ -156,7 +156,7 @@ Each keyed row supplies its description through `data-description`, used by both
 
 ### `SettingsGroup`
 
-A `<details>` one level above `SettingsSection`, for panes with more sections than fit on screen. `open` is bindable and `subtitle` shows a short hint — a count, or the active mode — that stays readable while collapsed.
+A `<details>` one level above `SettingsSection`, for panes with more sections than fit on screen. `open` is bindable (default `false`) and `subtitle` shows a short hint, such as a count or the active mode, that stays readable while collapsed.
 
 ```svelte example id="settings-group"
 <script lang="ts">
@@ -181,9 +181,7 @@ A `<details>` one level above `SettingsSection`, for panes with more sections th
 
 ### `NumberRangeInput`
 
-A number input and a slider bound to one value, wrapped in a flex `<label>`. Pass `min`, `max` and `step` explicitly, and use `title` for the description.
-
-Use native `data-key` to include a row in settings search and reset. Bounds must be numbers; `step` accepts a positive number or `"any"`. Numeric strings are rejected.
+A number input and a slider bound to one value, in a flex `<label>`. `min`, `max` and `step` are required: bounds must be numbers and `step` a positive number or `"any"`; numeric strings are rejected. `title` holds the description, and `data-key` includes the row in settings search and reset.
 
 ```svelte example id="number-range-input"
 <script lang="ts">
@@ -242,10 +240,10 @@ Use native `data-key` to include a row in settings search and reset. Bounds must
 <p>radius {radius}, opacity {opacity}, pressure {pressure} bar, gain {gain}</p>
 ```
 
-Hover a row's visible text for its `title` tooltip. The separate `label` names the slider for assistive technology. Without children, it also names the number input; with children, the visible text names that input. `number_props` and `range_props` can override individual ARIA attributes.
+Hover a row's visible text for its `title` tooltip. `label` names the slider for assistive technology, and also the number input when there are no children (otherwise the visible text names it). `number_props` and `range_props` override individual attributes, ARIA included.
 
-Use `scale="log"` for positive values across orders of magnitude. Bounds, the binding, numeric drafts, and `on_commit` stay in real units; the slider and arrow keys use base-10 exponent steps (`step={1}` multiplies or divides by 10). `step="any"` allows continuous dragging and uses one percent of the logarithmic span for keyboard steps. Zero, negative, and out-of-bounds numeric drafts never commit; valid typed values need not lie on the slider's step grid. Logarithmic bounds must be finite, strictly positive, and have distinct logarithms; a defined external value must lie inside them. Steps too small to change a representable value throw a configuration error.
+`scale="log"` suits positive values spanning orders of magnitude. Bounds, the binding, numeric drafts and `on_commit` stay in real units; the slider and arrow keys step in base-10 exponents (`step={1}` multiplies or divides by 10). `step="any"` allows continuous dragging and uses one percent of the logarithmic span for keyboard steps. Zero, negative, and out-of-bounds numeric drafts never commit; valid typed values need not lie on the slider's step grid. Logarithmic bounds must be finite, strictly positive, and have distinct logarithms; a defined external value must lie inside them. Steps too small to change a representable value throw a configuration error.
 
-The gain example keeps both endpoints selectable even though its step does not divide the span. Logarithmic number fields hide native spin buttons, whose additive increments cannot represent logarithmic steps; use the arrow keys or slider to step instead.
+Both endpoints stay selectable even when the step does not divide the span, as in the gain example. Logarithmic number fields hide native spin buttons, whose additive increments cannot represent logarithmic steps; the arrow keys and slider step instead.
 
-`commit="input"` (the default) updates while typing or dragging. `commit="change"` waits for change, blur, or Enter; a logarithmic arrow adjustment completes and commits one edit. Escape discards a numeric draft. Clearing retains the committed value unless `empty="undefined"` is set. `on_commit` receives each changed committed value once.
+`commit="input"` (default) updates while typing or dragging; `commit="change"` waits for change, blur or Enter, and a logarithmic arrow adjustment commits as one edit. Escape discards a numeric draft. Clearing retains the committed value unless `empty="undefined"` is set. `on_commit` receives each changed committed value once.

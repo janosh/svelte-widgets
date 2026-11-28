@@ -246,7 +246,7 @@
   const next_change = $derived(change_anchors.find((row_idx) => row_idx > navigation_row))
 
   const scroll_to_row = (row_idx: number) => {
-    const target = Math.max(0, row_idx * row_height)
+    const target = row_idx * row_height
     // Keep virtualization on the browser-clamped offset but navigation on the requested row.
     if (scroll_container) scroll_container.scrollTop = target
     scroll_top = scroll_container?.scrollTop ?? target

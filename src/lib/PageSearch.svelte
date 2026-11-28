@@ -18,6 +18,10 @@
       debounce_ms?: number
       // matched locally, so these stay searchable while the Pagefind index loads
       fallback_actions?: CmdAction[]
+      // pagefind_path: where the Pagefind bundle loads from; pagefind_key: with load_pagefind,
+      // names its index so a new key loads afresh
+      pagefind_key?: string
+      pagefind_path?: string
       strip_html_suffix?: boolean
     }
 

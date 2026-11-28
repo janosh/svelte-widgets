@@ -2,9 +2,16 @@
   import { onDestroy, untrack, type Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { click_outside, type DismissConfig, float } from './attachments/index'
-  import type { ActionMenuTriggerProps, CmdAction, CmdSection } from './types'
+  import type {
+    ActionMenuCloseVia,
+    ActionMenuOpenVia,
+    ActionMenuTriggerProps,
+    CmdAction,
+    CmdSection,
+  } from './types'
   import { focusable } from './attachments/shared'
   import { validate_cmd_actions } from './internal/command'
+  import { track_open } from './internal/open-state.svelte.ts'
   import { chain_handlers } from './utils'
   import { format_shortcut, step_focus } from './shortcuts'
   import type { Placement } from './position'
@@ -42,6 +49,10 @@
     dismiss?: DismissConfig
     item?: Snippet<[{ action: Action; section?: CmdSection<Action>; checked?: boolean }]>
     on_execute?: (detail: { action: Action; section?: CmdSection<Action> }) => unknown
+    // Each real change of the open state (`open`, or `at` in context mode) reports once,
+    // never on mount.
+    on_open?: (detail: { via: ActionMenuOpenVia }) => void
+    on_close?: (detail: { via: ActionMenuCloseVia }) => void
     padding?: number
     strategy?: `fixed` | `absolute`
   } & (ContextMode | DropdownMode)
@@ -55,6 +66,8 @@
     dismiss,
     item,
     on_execute,
+    on_open,
+    on_close,
     open = $bindable(false),
     placement = `bottom`,
     align = `start`,
@@ -78,13 +91,14 @@
   let trigger_wrapper = $state<HTMLSpanElement | null>(null)
   const trigger_element = $derived(trigger_wrapper?.firstElementChild ?? trigger_wrapper)
   const native_dismiss = $derived(
-    dismiss?.enabled !== false &&
+    !dismiss?.disabled &&
       dismiss?.escape !== false &&
       (dismiss?.dismiss_on ?? `release`) === `release` &&
       !dismiss?.inside?.some(Boolean) &&
       !dismiss?.scope,
   )
   let focus_origin: HTMLElement | SVGElement | null = null
+  let hiding_closed_menu = false // set while show_menu's cleanup hides a closing menu
   let context_open_timeout: ReturnType<typeof setTimeout> | undefined
 
   // A right-click is a zero-size anchor; dropdown mode uses the rendered trigger element.
@@ -116,19 +130,27 @@
     if (active === document.body || closing_menu.contains(active)) focus_origin?.focus()
     focus_origin = null
   }
-  const close = () => {
-    if (trigger_snippet) open = false
-    else at = null
-  }
+  // where a context-mode open places the menu, read by the setter below
+  let next_at: { x: number; y: number } | null = null
+  const change_open = track_open<ActionMenuOpenVia, ActionMenuCloseVia>(
+    () => (trigger_snippet ? open : Boolean(at)),
+    (value) => {
+      if (trigger_snippet) open = value
+      else at = value ? next_at : null
+    },
+    () => on_open,
+    () => on_close,
+  )
+  const close = (via: ActionMenuCloseVia) => change_open(false, via)
   // disabling an open menu closes it, so its items can't run while the trigger is disabled
   $effect(() => {
-    if (disabled && (open || at)) untrack(close)
+    if (disabled && (open || at)) untrack(() => close(`programmatic`))
   })
   const trigger_props = $derived<TriggerProps>({
     onclick: (event) => {
       if (!open && (disabled || all_empty)) return
       if (!open) remember_focus_origin(event.currentTarget)
-      open = !open
+      change_open(!open, `trigger`)
     },
     'aria-controls': open ? menu_id : undefined,
     'aria-expanded': open,
@@ -144,14 +166,17 @@
     // Chromium fires contextmenu before pointerup, which would light-dismiss an auto popover
     // opened synchronously from the same gesture.
     context_open_timeout = setTimeout(() => {
-      if (!disabled && !all_empty) at = point
+      if (disabled || all_empty) return
+      next_at = point
+      if (at) at = point // a right-click on an open menu only moves it
+      else change_open(true, `contextmenu`)
     }, 0)
   }
 
   onDestroy(() => clearTimeout(context_open_timeout))
 
   function run(action: Action, section?: CmdSection<Action>) {
-    close()
+    close(`select`)
     action.action(action.label)
     on_execute?.({ action, section })
   }
@@ -165,7 +190,11 @@
     node.showPopover(source ? { source } : undefined)
     enabled_items(node)[0]?.focus()
     return () => {
-      if (node.matches(`:popover-open`)) node.hidePopover()
+      if (node.matches(`:popover-open`)) {
+        hiding_closed_menu = true
+        node.hidePopover()
+        hiding_closed_menu = false
+      }
       restore_focus(node)
     }
   }
@@ -175,14 +204,26 @@
   const close_on_secondary_press = (node: HTMLMenuElement) => {
     const on_press = (event: PointerEvent) => {
       const inside = event.target instanceof Node && node.contains(event.target)
-      if (event.button !== 0 && !inside) close()
+      native_dismiss_via = inside ? null : `pointer`
+      if (event.button !== 0 && !inside) close(`pointer`)
+    }
+    // native light-dismiss reports no cause; the last input before it names one
+    const on_key = (event: KeyboardEvent) => {
+      native_dismiss_via = event.key === `Escape` ? `escape` : null
     }
     document.addEventListener(`pointerdown`, on_press, true)
-    return () => document.removeEventListener(`pointerdown`, on_press, true)
+    document.addEventListener(`keydown`, on_key, true)
+    return () => {
+      document.removeEventListener(`pointerdown`, on_press, true)
+      document.removeEventListener(`keydown`, on_key, true)
+    }
   }
+  let native_dismiss_via: `escape` | `pointer` | null = null
 
   const handle_popover_toggle = (event: ToggleEvent) => {
-    if (event.newState === `closed` && anchor) close()
+    const via = native_dismiss_via ?? `programmatic`
+    native_dismiss_via = null
+    if (event.newState === `closed` && anchor && !hiding_closed_menu) close(via)
   }
 
   // Arrows wrap enabled items; Tab closes and resumes page order.
@@ -190,7 +231,7 @@
     if (!(event.currentTarget instanceof HTMLMenuElement)) return
     if (event.key === `Tab`) {
       restore_focus(event.currentTarget)
-      close()
+      close(`tab`)
       return
     }
     step_focus(event, enabled_items(event.currentTarget))
@@ -238,7 +279,7 @@
           inside: trigger_snippet
             ? [...(dismiss?.inside ?? []), trigger_wrapper]
             : dismiss?.inside,
-          callback: close,
+          callback: (_node, _config, { via }) => close(via),
         })}
   >
     {#each actions as entry (is_section(entry) ? entry : entry.id)}
@@ -293,10 +334,12 @@
     inset: auto;
     z-index: var(--action-menu-z-index, 20);
     margin: 0;
-    padding: var(--action-menu-padding, 3pt);
+    padding: var(--action-menu-padding, 2pt);
     /* else rows inherit the page line-height: on a 16px/1.6 body each item is 33px tall
        before its own padding */
     line-height: var(--action-menu-line-height, 1.35);
+    font-size: var(--action-menu-font-size, 0.75rem);
+    text-align: left; /* else headings and items inherit a centered host card's alignment */
     list-style: none;
     min-width: var(--action-menu-min-width, 10rem);
     background: var(--action-menu-bg, var(--sms-options-bg, light-dark(#fff, #2a2a2e)));
@@ -306,13 +349,12 @@
     button {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 1em;
+      gap: 0.5em;
       width: 100%;
       padding: var(--action-menu-item-padding, 2pt 6pt);
       background: none;
       border: none;
-      border-radius: 3pt;
+      border-radius: var(--action-menu-item-radius, 3pt);
       color: inherit;
       font: inherit;
       text-align: left;
@@ -337,6 +379,10 @@
       );
       font-weight: 600;
     }
+    button > span[aria-hidden] {
+      margin-left: auto; /* shortcut hugs the right edge */
+      padding-left: 1em;
+    }
     kbd {
       /* a bare `monospace` family resolves `em` against the browser's monospace default
          (13px, not 16px), shrinking symbol keys like ⌘ ⇧ ⌥ past legibility */
@@ -355,9 +401,10 @@
     .section-title {
       display: block;
       padding: var(--action-menu-item-padding, 2pt 6pt);
-      font-size: 0.75em;
+      font-size: 0.8em;
       letter-spacing: 0.05em;
-      opacity: 0.6;
+      font-weight: 600; /* headings outweigh the items they group */
+      opacity: 0.75;
       text-transform: uppercase;
     }
   }

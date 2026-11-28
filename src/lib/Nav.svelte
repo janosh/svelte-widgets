@@ -14,9 +14,10 @@
     tooltip,
   } from './attachments/index'
   import Icon from './Icon.svelte'
+  import { track_open } from './internal/open-state.svelte.ts'
   import { create_key_selector } from './internal/key-selector.svelte.ts'
   import { merge_defaults, NAV_LABELS, type NavLabels } from './labels'
-  import type { NavGroup, NavLink, NavRoute } from './types'
+  import type { NavCloseVia, NavGroup, NavLink, NavOpenVia, NavRoute } from './types'
   import { is_composing } from './attachments/shared'
   import { chain_handlers } from './utils'
   import { step_focus } from './shortcuts'
@@ -59,8 +60,8 @@
       event: MouseEvent
       route: Route
     }) => false | undefined
-    on_open?: () => void
-    on_close?: () => void
+    on_open?: (detail: { via: NavOpenVia }) => void
+    on_close?: (detail: { via: NavCloseVia }) => void
   } & Omit<HTMLAttributes<HTMLElementTagNameMap[`nav`]>, `children`> = $props()
 
   const msg = $derived(merge_defaults(NAV_LABELS, labels))
@@ -93,25 +94,23 @@
   let viewport_width = $state(globalThis.innerWidth ?? Infinity)
   const is_mobile = $derived(viewport_width <= breakpoint)
   const unique_id = $props.id()
+  const script_tag = `script` // a literal tag in the template would end this <script>
   const panel_id = `nav-menu-${unique_id}`
-  // Plain bookkeeping avoids retriggering the observer when it records the new state.
-  let was_open = false
-  $effect(() => {
-    if (open !== was_open) {
-      if (open) on_open?.()
-      else {
-        open_dropdown = null
-        on_close?.()
-      }
-    }
-    was_open = open
-  })
+  const change_open = track_open<NavOpenVia, NavCloseVia>(
+    () => open,
+    (value) => (open = value),
+    () => on_open,
+    () => (detail) => {
+      open_dropdown = null
+      on_close?.(detail)
+    },
+  )
   $effect(() => {
     if (open_dropdown && !checked_routes.includes(open_dropdown)) open_dropdown = null
   })
 
-  function close_menus() {
-    open = false
+  function close_menus(via: NavCloseVia) {
+    change_open(false, via)
     open_dropdown = null
   }
 
@@ -150,7 +149,7 @@
     }
   }
   function onkeydown(event: KeyboardEvent) {
-    if (event.key === `Escape`) close_menus()
+    if (event.key === `Escape`) close_menus(`escape`)
   }
   function handle_toggle_keydown(event: KeyboardEvent, idx: number) {
     const { key } = event
@@ -167,7 +166,7 @@
     if (open_dropdown !== checked_routes[idx]) return
     if (event.key === `Escape`) {
       event.preventDefault()
-      close_menus()
+      close_menus(`escape`)
       dropdown_toggle(idx)?.focus()
     } else if (
       (event.key === `Tab` && !is_composing(event)) ||
@@ -235,15 +234,18 @@
       event.preventDefault()
       return
     }
-    close_menus()
+    close_menus(`select`)
   }
 </script>
 
 <svelte:window {onkeydown} bind:innerWidth={viewport_width} />
 
-{#snippet default_link(route: Route)}
+<!-- column: which outer edge of a multi-column dropdown the item sits against -->
+{#snippet default_link(route: Route, column?: `first` | `last`, edge?: string)}
   {#if route.disabled || route.href === undefined}
     <span
+      data-column={column}
+      data-edge={edge}
       class={[{ disabled: route.disabled }, route.class]}
       style={route.style}
       aria-disabled={route.disabled || undefined}
@@ -257,6 +259,8 @@
       rel={route.rel ?? link_props?.rel}
       title={route.title ?? link_props?.title}
       aria-current={is_current(route)}
+      data-column={column}
+      data-edge={edge}
       class={[route.class, link_props?.class]}
       style={`${link_props?.style ?? ``}; ${route.style ?? ``}`}
       onclick={chain_handlers(
@@ -283,11 +287,11 @@
   onclick={chain_handlers((event: MouseEvent) => {
     const target = event.target
     if (target instanceof Element && target.closest(`a[href]`) && !event.defaultPrevented)
-      close_menus()
+      close_menus(`select`)
   }, rest.onclick)}
   {@attach click_outside({
-    enabled: open || open_dropdown !== null,
-    callback: close_menus,
+    disabled: !open && open_dropdown === null,
+    callback: (_node, _config, { via }) => close_menus(via),
   })}
 >
   <button
@@ -297,7 +301,7 @@
     aria-expanded={open}
     aria-controls={panel_id}
     class={[`burger`, burger_props?.class]}
-    onclick={chain_handlers(() => (open = !open), burger_props?.onclick)}
+    onclick={chain_handlers(() => change_open(!open, `trigger`), burger_props?.onclick)}
   >
     <span aria-hidden="true"></span>
     <span aria-hidden="true"></span>
@@ -392,20 +396,38 @@
             <div class="submenu-inner">
               <!-- headings key on their slot: one section name may head several runs -->
               {#each items as item, slot (typeof item === `string` ? slot : item)}
+                {@const column = two_columns
+                  ? slot < n_rows
+                    ? `first`
+                    : `last`
+                  : undefined}
+                <!-- top/bottom of its column: the inner corner there meets the rule square -->
+                {@const edge = two_columns
+                  ? [
+                      (slot === 0 || slot === n_rows) && `top`,
+                      (slot === n_rows - 1 || slot === items.length - 1) && `bottom`,
+                    ]
+                      .filter(Boolean)
+                      .join(` `) || undefined
+                  : undefined}
                 {#if typeof item === `string`}
-                  <!-- a heading topping column 2 draws no separator -->
+                  <!-- a heading topping column 2 gets no top margin -->
                   <div
                     class={[
                       `submenu-section`,
                       { 'column-start': two_columns && slot === n_rows },
                     ]}
+                    data-column={column}
+                    data-edge={edge}
                   >
                     {item}
                   </div>
                 {:else}
-                  {@render default_link(item)}
+                  {@render default_link(item, column, edge)}
                 {/if}
               {/each}
+              <!-- pinned to the middle grid track, so the links flow around it -->
+              {#if two_columns}<span class="column-rule" aria-hidden="true"></span>{/if}
             </div>
           </div>
         </div>
@@ -417,13 +439,16 @@
     {/each}
     {@render children?.({ open, panel_id, routes })}
   </div>
+  <!-- the server can't know the viewport and renders the desktop menu: this runs before the
+  first paint and applies the mobile layout hydration would (script_tag: see its comment) -->
+  {@html `<${script_tag}>document.currentScript.parentElement.classList.toggle('mobile', innerWidth <= ${Number(breakpoint)})</${script_tag}>`}
 </nav>
 
 <style>
   nav {
     position: relative;
-    margin: -0.75em auto 1.25em;
-    --nav-border-radius: 3pt;
+    margin: var(--nav-margin, -0.75em auto 1.25em);
+    --nav-radius: 3pt;
     --nav-surface-bg: light-dark(#fafafa, #222226);
     --nav-surface-border: light-dark(rgba(128, 128, 128, 0.25), rgba(200, 200, 200, 0.2));
     /* light-dark() takes colors only: one shadow layer per theme, transparent in the other */
@@ -452,7 +477,7 @@
   .dropdown > div:first-child {
     display: flex;
     align-items: center;
-    border-radius: var(--nav-border-radius);
+    border-radius: var(--nav-radius);
     background-color: var(--nav-link-bg);
     transition: background-color 0.2s;
   }
@@ -497,8 +522,8 @@
   }
   .dropdown > div:first-child > :is(a, span) {
     padding-inline-end: 2pt;
-    border-start-start-radius: var(--nav-border-radius);
-    border-end-start-radius: var(--nav-border-radius);
+    border-start-start-radius: var(--nav-radius);
+    border-end-start-radius: var(--nav-radius);
   }
   .dropdown > div:first-child > button {
     padding-block: 1pt;
@@ -510,8 +535,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border-start-end-radius: var(--nav-border-radius);
-    border-end-end-radius: var(--nav-border-radius);
+    border-start-end-radius: var(--nav-radius);
+    border-end-end-radius: var(--nav-radius);
     outline: none;
     opacity: 0.6;
     transition:
@@ -543,7 +568,7 @@
     width: var(--nav-dropdown-width, max-content);
     background-color: var(--nav-dropdown-bg, var(--nav-surface-bg));
     border: 1px solid var(--nav-dropdown-border-color, var(--nav-surface-border));
-    border-radius: var(--nav-border-radius, 6pt);
+    border-radius: var(--nav-radius, 6pt);
     box-shadow: var(--nav-dropdown-shadow, var(--nav-surface-shadow));
     padding: var(--nav-dropdown-padding, 0);
     display: none;
@@ -555,7 +580,7 @@
   }
   .dropdown > div:last-child.visible.two-columns {
     display: grid;
-    grid-template-columns: repeat(2, max-content);
+    grid-template-columns: max-content 0.5px max-content; /* a hairline on HiDPI */
     grid-template-rows: repeat(var(--submenu-rows), auto);
     grid-auto-flow: column;
     column-gap: 0.25em;
@@ -581,18 +606,75 @@
     font-size: 0.9em;
     transition: background-color 0.15s;
   }
+  /* a shaded band; the text dims via color-mix, not opacity, which would fade the band too */
   .submenu-section {
-    padding: var(--nav-section-padding, 5pt 6pt 1pt);
+    padding: var(--nav-section-padding, 3pt 6pt);
+    margin-bottom: 2pt;
     font-size: var(--nav-section-font-size, 0.72em);
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    opacity: var(--nav-section-opacity, 0.6);
+    color: color-mix(
+      in srgb,
+      currentColor calc(var(--nav-section-opacity, 0.6) * 100%),
+      transparent
+    );
+    background-color: var(
+      --nav-section-bg,
+      light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.06))
+    );
     white-space: nowrap;
     &:not(:first-child, .column-start) {
       margin-top: 3pt;
-      border-top: 1px solid var(--nav-dropdown-border-color, var(--nav-surface-border));
     }
+    /* a band at the panel's top edge follows its rounded corners */
+    &:first-child {
+      border-start-start-radius: calc(var(--nav-radius, 6pt) - 1px);
+      border-start-end-radius: calc(var(--nav-radius, 6pt) - 1px);
+    }
+  }
+  .column-rule {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    margin-block: 6pt;
+    background-color: var(
+      --nav-column-rule-color,
+      light-dark(rgba(128, 128, 128, 0.15), rgba(200, 200, 200, 0.1))
+    );
+  }
+  /* in columns, bands and hovers round only the sides facing a neighbour column: outer
+     sides sit flush with the panel edge (a middle column would round all four) */
+  .two-columns :is(a, span.disabled, .submenu-section) {
+    border-radius: var(--nav-item-radius, 3pt);
+    &[data-column='first'] {
+      border-start-start-radius: 0;
+      border-end-start-radius: 0;
+    }
+    &[data-column='last'] {
+      border-start-end-radius: 0;
+      border-end-end-radius: 0;
+    }
+  }
+  /* an item topping or ending a column squares the inner corner there, so its band or
+     hover meets the column rule flush */
+  .two-columns [data-column='first'][data-edge~='top'] {
+    border-start-end-radius: 0;
+  }
+  .two-columns [data-column='first'][data-edge~='bottom'] {
+    border-end-end-radius: 0;
+  }
+  .two-columns [data-column='last'][data-edge~='top'] {
+    border-start-start-radius: 0;
+  }
+  .two-columns [data-column='last'][data-edge~='bottom'] {
+    border-end-start-radius: 0;
+  }
+  /* a heading topping a column follows the panel's outer corner */
+  .two-columns .submenu-section[data-column='first']:first-child {
+    border-start-start-radius: calc(var(--nav-radius, 6pt) - 1px);
+  }
+  .two-columns .submenu-section[data-column='last'].column-start {
+    border-start-end-radius: calc(var(--nav-radius, 6pt) - 1px);
   }
   .dropdown > div:last-child a:hover {
     background-color: var(--nav-link-bg-hover, rgba(0, 0, 0, 0.1));
@@ -619,7 +701,7 @@
        leaves the bars on whatever text passes beneath */
     background: var(--nav-burger-bg, var(--nav-surface-bg));
     border: 1px solid var(--nav-burger-border-color, var(--nav-surface-border));
-    border-radius: var(--nav-border-radius, 6pt);
+    border-radius: var(--nav-radius, 6pt);
     box-shadow: var(--nav-burger-shadow, var(--nav-surface-shadow));
     z-index: var(--nav-toggle-btn-z-index, 10);
   }
@@ -700,7 +782,7 @@
      --nav-item-padding stacked on the row's and indented every expandable entry */
   nav.mobile .dropdown > div:first-child > :is(a, span) {
     flex: 1;
-    border-radius: var(--nav-border-radius);
+    border-radius: var(--nav-radius);
     margin-inline-start: -4pt;
     padding-inline-start: 4pt;
     padding-block: 0;
@@ -720,7 +802,7 @@
     align-self: stretch;
     margin: -1pt -4pt -1pt 0;
     padding: 1pt 4pt 1pt 14pt;
-    border-radius: var(--nav-border-radius);
+    border-radius: var(--nav-radius);
   }
   /* `display: none` can't transition, so collapse via a 0fr grid row + fade. `visibility`
      keeps the still-mounted links out of the tab order. */
@@ -781,8 +863,8 @@
     overflow-wrap: anywhere;
     padding-block: 1pt;
     padding-inline: 4pt 8pt;
-    border-start-end-radius: var(--nav-border-radius);
-    border-end-end-radius: var(--nav-border-radius);
+    border-start-end-radius: var(--nav-radius);
+    border-end-end-radius: var(--nav-radius);
     /* matches the top-level rows; an inherited 1.6 made child rows taller than their parent */
     line-height: 1.3;
     /* pull the link's border onto the wrapper's guide line so the active row recolours a

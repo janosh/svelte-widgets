@@ -1,6 +1,6 @@
 ## `resizable`
 
-`resizable` adds edge and corner handles and reports the resulting dimensions. Drag a corner with Shift to preserve the aspect ratio. Edge handles are keyboard-focusable: arrows resize by 10px, Shift+arrow by 50px, and Enter resets the size. Double-clicking an enabled edge or corner also resets it.
+`resizable` adds handles on the listed `edges` (default `right` and `bottom`) plus corners where two meet, and reports the resulting dimensions. Drag a corner with Shift to preserve the aspect ratio. Edge handles are keyboard-focusable: arrows resize by 10px, Shift+arrow by 50px, and Enter resets the size. Double-clicking any handle also resets it.
 
 ```svelte example id="attachments-resizable"
 <script lang="ts">

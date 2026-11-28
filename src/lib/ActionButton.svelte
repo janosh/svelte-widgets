@@ -90,7 +90,6 @@
     }
     if (destroyed || reset_ms <= 0) return
     reset_timeout = setTimeout(() => {
-      if (destroyed) return
       // Snippets get `result`/`error` alongside `state`, so leaving them populated kept a
       // `{#if error}` branch rendering a failure after the button had returned to idle.
       result = undefined

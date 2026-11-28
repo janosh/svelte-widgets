@@ -9,7 +9,7 @@ import { is_dark_mode, watch_theme_changes } from '../theme-core'
 // published types don't need the optional `mermaid` package installed
 export type MermaidDiagramConfig = { theme?: string; [option: string]: unknown }
 
-export const MERMAID_SELECTOR = `pre.mermaid`
+const MERMAID_SELECTOR = `pre.mermaid`
 // Authored source per block, so theme changes re-render from it rather than from the SVG
 const sources = new WeakMap<Element, string>()
 // mermaid.initialize() is global, so renders run one at a time with their own theme

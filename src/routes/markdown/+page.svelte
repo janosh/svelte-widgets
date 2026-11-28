@@ -2,4 +2,6 @@
   import Markdown from '#lib/markdown/readme.md'
 </script>
 
-<Markdown />
+<main>
+  <Markdown />
+</main>

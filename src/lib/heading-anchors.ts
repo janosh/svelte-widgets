@@ -86,7 +86,7 @@ export const slugify_heading = (text: string): string =>
 
 // Ids already in the document, for `unique_heading_id` to avoid. Lazy and memoized: the
 // scan is expensive and only needed when a heading actually lacks an id.
-export const document_used_ids = (): (() => Set<string>) => {
+const document_used_ids = (): (() => Set<string>) => {
   let used_ids: Set<string> | undefined
   return () =>
     (used_ids ??= new Set(

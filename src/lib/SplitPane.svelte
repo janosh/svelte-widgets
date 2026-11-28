@@ -12,7 +12,7 @@
     collapsible = false,
     on_resize,
     ratio = $bindable(0.5),
-    first_px = $bindable(undefined),
+    first_px = $bindable(),
     min_px,
     max_px,
     second_min_px,

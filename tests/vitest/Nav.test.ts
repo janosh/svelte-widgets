@@ -1,6 +1,6 @@
 import { Nav } from '#lib'
 import type { NavRoute, NavLink } from '#lib/types.ts'
-import { type ComponentProps, tick } from 'svelte'
+import { type ComponentProps, flushSync, tick } from 'svelte'
 import { fromStore, writable } from 'svelte/store'
 import { assert, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import {
@@ -132,7 +132,29 @@ describe(`Nav`, () => {
     expect(state()).toEqual([`false`, false])
     expect(link_props.onclick).toHaveBeenCalledOnce()
     // one call per open/close transition and none on mount
-    expect([on_open.mock.calls.length, on_close.mock.calls.length]).toEqual([2, 2])
+    expect([on_open.mock.calls, on_close.mock.calls]).toEqual([
+      [[{ via: `trigger` }], [{ via: `trigger` }]],
+      [[{ via: `escape` }], [{ via: `select` }]],
+    ])
+  })
+  test(`mounting open reports nothing`, () => {
+    const [on_open, on_close] = [vi.fn(), vi.fn()]
+    mount_nav({ routes: default_routes, open: true, on_open, on_close })
+    flushSync()
+    expect([on_open.mock.calls, on_close.mock.calls]).toEqual([[], []])
+  })
+  // the observer records the new state before the callback, so a callback that closes
+  // the menu again still gets its own on_close
+  test(`a callback flipping open back still reports that change`, async () => {
+    const on_close = vi.fn()
+    const on_open = vi.fn(() => doc_query(`.burger`).click())
+    mount_nav({ routes: default_routes, on_open, on_close })
+    await click(doc_query(`.burger`))
+    flushSync()
+    expect([on_open.mock.calls.length, on_close.mock.calls]).toEqual([
+      1,
+      [[{ via: `trigger` }]],
+    ])
   })
   test(`burger bars take the shared --text-color`, () => {
     const host = document.createElement(`div`)
@@ -765,7 +787,7 @@ describe(`Nav`, () => {
       expect(hrefs(submenu)).toEqual(children.map(({ href }) => href))
     })
     // a heading never ends column 1 (rows grow by one instead) and one topping column 2
-    // draws no separator; a section name may head several runs
+    // gets no top margin; a section name may head several runs. Two columns get a rule.
     test.each([
       [[`a`, `a`, `a`, `b`, `b`, `b`], 1024, 7, 4, [false, true]],
       [[`a`, `a`, `a`, `b`, `b`, `b`], 500, 7, 4, [false, false]],
@@ -790,6 +812,34 @@ describe(`Nav`, () => {
         expect(
           headings.map((heading) => heading.classList.contains(`column-start`)),
         ).toEqual(column_starts)
+        const two_columns = submenu.classList.contains(`two-columns`)
+        expect(submenu.querySelectorAll(`.column-rule`)).toHaveLength(two_columns ? 1 : 0)
+        // bands and hovers round the side facing the other column, keyed on data-column
+        const links_and_headings = items.filter((el) => !el.matches(`.column-rule`))
+        expect(links_and_headings.map((el) => el.getAttribute(`data-column`))).toEqual(
+          links_and_headings.map((_, idx) =>
+            two_columns ? (idx < rows ? `first` : `last`) : null,
+          ),
+        )
+        // the first and last item of each column (link or heading) squares its inner corner
+        // there, so its band or hover meets the rule flush
+        const column_ends = links_and_headings.flatMap((el, idx) =>
+          two_columns && [0, rows - 1, rows, links_and_headings.length - 1].includes(idx)
+            ? [el]
+            : [],
+        )
+        expect(column_ends.map((el) => el.getAttribute(`data-edge`))).toEqual(
+          two_columns ? [`top`, `bottom`, `top`, `bottom`] : [],
+        )
+        expect(
+          column_ends.map((el) => {
+            const style = getComputedStyle(el)
+            const first = el.getAttribute(`data-column`) === `first`
+            if (el.getAttribute(`data-edge`) === `top`)
+              return first ? style.borderStartEndRadius : style.borderStartStartRadius
+            return first ? style.borderEndEndRadius : style.borderEndStartRadius
+          }),
+        ).toEqual(column_ends.map(() => `0`))
       },
     )
     test.each([

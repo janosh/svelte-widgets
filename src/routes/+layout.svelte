@@ -2,7 +2,7 @@
   import { afterNavigate, goto } from '$app/navigation'
   import { asset } from '$app/paths'
   import { page } from '$app/state'
-  import { CopyButton, Footer, GitHubCorner, PageSearch, Toc } from '#lib'
+  import { CopyButton, Footer, GitHubCorner, PageSearch, ThemeScript, Toc } from '#lib'
   import { Edit } from '#lib/icons.ts'
   import { observe_subtree, slug_to_title } from '#lib/utils.ts'
   import { flash_toc_target } from '#lib/toc-utils.ts'
@@ -130,6 +130,8 @@
   <link rel="icon" href={favicon} />
 </svelte:head>
 
+<ThemeScript />
+
 <header class="site-header">
   <a class="brand" href={resolve_path(`/`)}>
     <img src={favicon} alt="Logo" style="width: 1.2em; height: 1.2em;" />
@@ -156,7 +158,6 @@
 <div class="docs-body">
   <div
     data-pagefind-body
-    style="display: contents"
     {@attach highlight_matches({
       query: page_search_query,
       css_class: `page-search-match`,

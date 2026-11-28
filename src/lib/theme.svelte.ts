@@ -34,14 +34,16 @@ export const apply_theme_mode = (mode: ThemeMode): void => {
   const effective = mode === `system` ? system_scheme() : mode
   document.documentElement.style.colorScheme = effective
   document.documentElement.dataset.theme = effective
+  // lets ThemeToggle's server-rendered markup show the right icon before hydration
+  document.documentElement.dataset.themeMode = mode
   theme_mode = mode
   theme_resolved = effective
   storage_set(`theme`, mode)
 }
 
 // Mount once per owner and dispose with it. Also works without a ThemeToggle.
-export const watch_theme = (): (() => void) => {
-  if (typeof document === `undefined`) throw new TypeError(`watch_theme() is client-only`)
+export const init_theme = (): (() => void) => {
+  if (typeof document === `undefined`) throw new TypeError(`init_theme() is client-only`)
   // Read a valid stored choice on every start, retaining in-memory choices if none is readable.
   apply_theme_mode(resolve_theme_mode(theme.mode))
   const color_scheme_query = matchMedia(`(prefers-color-scheme: dark)`)

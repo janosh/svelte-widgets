@@ -173,7 +173,7 @@ describe(`float`, () => {
   })
 
   it.each([
-    [`disabled`, { enabled: false }],
+    [`disabled`, { disabled: true }],
     [`no anchor`, { anchor: null }],
   ] as const)(`%s attaches nothing`, (_desc, options) => {
     const node = create_element()

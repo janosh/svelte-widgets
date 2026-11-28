@@ -134,7 +134,7 @@
 {:else}
   <span
     class="json-value {value_type}"
-    class:changed={changed_flash.value}
+    class:changed={changed_flash.current}
     class:editable={is_editable}
     onclick={handle_click}
     ondblclick={start_edit}

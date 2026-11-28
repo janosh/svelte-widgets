@@ -1,15 +1,15 @@
 <script lang="ts">
-  import type { PopoverTriggerProps } from './types'
+  import type { PopoverCloseVia, PopoverOpenVia, PopoverTriggerProps } from './types'
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import type { DismissConfig } from './attachments/index'
   import { click_outside, float, focus_trap } from './attachments/index'
   import { escape_layer, focusable } from './attachments/shared'
+  import { track_open } from './internal/open-state.svelte.ts'
   import { chain_handlers } from './utils'
-  import type { Placement } from './position'
+  import type { Placement, PositionOptions } from './position'
 
   type PopupRole = `alertdialog` | `dialog` | `menu` | `listbox` | `tree` | `grid`
-  type PopupHasPopup = Exclude<PopupRole, `alertdialog`>
   type TriggerProps = PopoverTriggerProps
   type TriggerMode = `click` | `hover` | `focus`
   const unique_id = $props.id()
@@ -31,6 +31,7 @@
     trigger,
     trigger_mode = `click`,
     children,
+    on_open,
     on_close,
     id,
     role = `dialog`,
@@ -38,7 +39,7 @@
   }: Omit<HTMLAttributes<HTMLDivElement>, `children` | `role`> & {
     open?: boolean
     placement?: Placement | `auto`
-    align?: `center` | `start`
+    align?: PositionOptions[`align`]
     offset?: number
     padding?: number // closest the surface may come to a viewport edge
     match_width?: boolean // size the surface to the trigger, for dropdown-like menus
@@ -56,7 +57,8 @@
     trigger?: Snippet<[TriggerProps]>
     trigger_mode?: TriggerMode
     children: Snippet
-    on_close?: (detail: { via: `pointer` | `escape` | `trigger` }) => void
+    on_open?: (detail: { via: PopoverOpenVia }) => void
+    on_close?: (detail: { via: PopoverCloseVia }) => void
   } = $props()
 
   const surface_id = $derived(id ?? unique_id)
@@ -83,11 +85,15 @@
     clear_close_timeout()
   }
 
-  const close = (via: `pointer` | `escape` | `trigger`) => {
+  const change_open = track_open<PopoverOpenVia, PopoverCloseVia>(
+    () => open,
+    (value) => (open = value),
+    () => on_open,
+    () => on_close,
+  )
+  const close = (via: PopoverCloseVia) => {
     clear_timeouts()
-    if (!open) return
-    open = false
-    on_close?.({ via })
+    change_open(false, via)
   }
 
   // Native auto popovers own light dismissal and Escape; this only records the close reason
@@ -108,6 +114,9 @@
     const { signal } = listeners
     document.addEventListener(`keydown`, track_native_escape, { signal })
     document.addEventListener(`pointerdown`, track_native_pointer, { signal })
+    // aborted before the teardown's hidePopover(): props read their pre-teardown values
+    // there, so its toggle would pass for a dismissal of a still-open popover
+    node.addEventListener(`toggle`, handle_native_toggle, { signal })
     // The browser's close watcher dismisses an auto popover on Escape, so claim the key from
     // outer layers (e.g. a hosting pane's capture listener would cancel it first) without
     // canceling it ourselves
@@ -147,7 +156,7 @@
     open_timeout = setTimeout(() => {
       if (trigger_mode === scheduled_mode) {
         next_trigger_focus = focusable(target)
-        open = true
+        change_open(true, `trigger`)
       }
     }, open_delay_ms)
   }
@@ -189,7 +198,7 @@
     if (open) return close(`trigger`)
     clear_timeouts()
     next_trigger_focus = focusable(event.currentTarget)
-    open = true
+    change_open(true, `trigger`)
   }
 
   const trigger_props: TriggerProps = $derived.by(() => {
@@ -223,7 +232,6 @@
     {role}
     aria-label={rest[`aria-label`] ?? (rest[`aria-labelledby`] ? undefined : `Popover`)}
     class={[`popover`, rest.class]}
-    ontoggle={chain_handlers(handle_native_toggle, rest.ontoggle)}
     {@attach show_native_popover}
     {@attach float({ anchor, placement, align, offset, padding, match_width, strategy })}
     {@attach native_dismiss
@@ -235,7 +243,7 @@
           callback: (_node, _config, { via }) => close(via),
         })}
     {@attach focus_trap({
-      enabled: trap_focus,
+      disabled: !trap_focus,
       // Hover/focus opening must not steal focus.
       initial: click_mode ? undefined : false,
       // Return focus to the exact trigger that opened this instance; `false` for one the

@@ -2,7 +2,7 @@
 
 A sticky table of contents that tracks the active heading. Pass `items` from a [content manifest](markdown#content-manifests) to render navigation on the server. Without `items`, it queries existing heading IDs once on mount. Set `dynamic` to observe headings that change after mount.
 
-The site table of contents uses the Markdown manifest. The example scopes its one-time DOM query to explicitly identified sample headings with `heading_selector`. Invalid selectors or `collapse_subheadings` values throw instead of silently disabling navigation.
+This site's own TOC uses the Markdown manifest; the example below scopes its one-time DOM query to its sample headings with `heading_selector`. Invalid selectors or `collapse_subheadings` values throw instead of silently disabling navigation.
 
 ```svelte example id="toc-basic"
 <script lang="ts">
@@ -68,7 +68,7 @@ In an app, the headings often scroll inside a pane rather than the page. Pass th
 
 ### Collapsing
 
-`collapse_subheadings` takes `true` to fold everything below the top level, or a heading tag to pick the level to fold from — `h3` keeps `h2` entries expanded and hides the rest until their section is active.
+`collapse_subheadings` folds subheadings under inactive parents. `true` folds every level below the top; a heading tag names the deepest level that folds, and deeper headings show whenever that ancestor shows. `h3` keeps `h2` entries visible, hides `h3` entries until their section is active, and shows each `h4` along with its `h3`.
 
 ```svelte
 <Toc collapse_subheadings="h3" />

@@ -5,8 +5,7 @@
 
 ## Extras
 
-The small components that ship alongside the headline ones. Each is a named export from
-the package root:
+Smaller components, each a named export from the package root:
 
 ```svelte
 <script>
@@ -16,7 +15,7 @@ the package root:
 
 ### `Toggle`
 
-A checkbox styled as a switch. `checked` is bindable and the children snippet receives it, so the label can react to the state. Everything else spreads onto the wrapping `<label>`.
+A checkbox styled as a switch. `checked` is bindable and passed to the children snippet, so the label can react to it. Other props spread onto the wrapping `<label>`.
 
 ```svelte example id="toggle-demo"
 <script lang="ts">
@@ -35,7 +34,7 @@ A checkbox styled as a switch. `checked` is bindable and the children snippet re
   <Toggle
     bind:checked={telemetry}
     style="gap: 8pt"
-    --toggle-background="forestgreen"
+    --toggle-bg="forestgreen"
     --toggle-knob-width="4em"
   >
     Telemetry (custom CSS vars)
@@ -45,7 +44,7 @@ A checkbox styled as a switch. `checked` is bindable and the children snippet re
 
 ### `ThemeToggle`
 
-Cycles light → system → dark → light, writes the choice to `localStorage.theme`, and sets `colorScheme` plus `data-theme` on `<html>`. The button stays hidden until mounted so SSR cannot flash a stale icon, and mounted toggles synchronize changes across tabs. Headless consumers can call `watch_theme()` to initialize the theme and follow both system preference and cross-tab changes, then call its returned cleanup function on teardown; flash-free first paint still requires equivalent [synchronous logic in the HTML shell](https://github.com/janosh/svelte-widgets/blob/main/src/app.html#L16) because hydration is too late.
+Cycles light → system → dark → light, writes the choice to `localStorage.theme`, and sets `colorScheme` plus `data-theme` on `<html>`. Before hydration it renders all three icons and shows the one matching the `data-theme-mode` that `ThemeScript` sets on `<html>`, so the stored mode's icon appears on first paint without a layout shift (without `ThemeScript` the button stays empty until mount). Mounted toggles synchronize changes across tabs. Without a toggle, `init_theme()` applies the stored mode and follows system-preference and cross-tab changes until its returned cleanup runs. Flash-free first paint still needs `<ThemeScript />` in the root layout (or `theme_init_script` injected into the HTML shell), since hydration is too late.
 
 ```svelte example id="theme-toggle-demo"
 <script lang="ts">
@@ -55,11 +54,11 @@ Cycles light → system → dark → light, writes the choice to `localStorage.t
 <ThemeToggle
   style="font-size: 2em"
   tooltip={{ placement: `right` }}
-  icon_props={{ style: `color: var(--accent)` }}
+  icon_props={{ style: `color: var(--accent-color)` }}
 />
 ```
 
-`svelte-widgets/theme` also reads the scheme an element renders in (`is_dark_mode`, `nearest_declared` across shadow roots), calls back when that may change (`watch_theme_changes`, `watch_dark_mode`: class, `data-theme` or inline `color-scheme` on any ancestor, or the OS preference), and resolves color tokens such as `light-dark()` against an element for canvas or WebGL (`resolve_color_token`). Bundles built without the Svelte compiler (workers, Node) import all but the reactive `theme`, `apply_theme_mode` and `watch_theme` from `svelte-widgets/theme-core`:
+`svelte-widgets/theme` also reads the scheme an element renders in (`is_dark_mode`, `nearest_declared` across shadow roots), calls back when that may change (`watch_theme_changes`, `watch_dark_mode`: class, `data-theme` or inline `color-scheme` on any ancestor, or the OS preference), and resolves color tokens such as `light-dark()` against an element for canvas or WebGL (`resolve_color_token`). Bundles built without the Svelte compiler (workers, Node) import all but the reactive `theme`, `apply_theme_mode` and `init_theme` from `svelte-widgets/theme-core`:
 
 ```svelte example id="theme-core-demo"
 <script lang="ts">
@@ -173,7 +172,7 @@ A dependency-free loading indicator. `size`, `color` and `duration` are plain CS
 
 ### `FileDetails`
 
-A list of collapsible `<details>`, one per file, with a button that opens or closes all of them at once. Code is plain by default. Pass a `highlight(code, language, signal)` callback to color it; the example uses `default_highlighter` from `svelte-widgets/highlight`, which requires the optional peer `@wooorm/starry-night`. Highlighter failures appear alongside the source. Titles are plain text; use `title_snippet({ title, idx, content, language })` for rich rendering. The `files` array is read-only input; DOM references stay internal.
+A list of collapsible `<details>`, one per file, with a button that opens or closes all of them at once. Code is plain unless you pass a `highlight(code, language, signal)` callback; the example uses `default_highlighter` from `svelte-widgets/highlight`, which needs the optional peer `@wooorm/starry-night`. Highlighter errors show as an alert beside the source. Titles are plain text; use `title_snippet({ title, idx, content, language })` for rich rendering. The `files` array is read-only input; DOM references stay internal.
 
 ```svelte example id="file-details-demo"
 <script lang="ts">
@@ -256,7 +255,7 @@ An inline pill for categories, statuses, filters and counts. It is a static `<sp
 </ul>
 ```
 
-Style it with `--tag-color` (the fill/tint/border), `--tag-bg`, `--tag-active-bg`, `--tag-text-color`, `--tag-border-radius`, `--tag-padding`, `--tag-font-size` and friends; the full list is on the [theming page](theming).
+Style it with `--tag-color` (the fill/tint/border), `--tag-bg`, `--tag-active-bg`, `--tag-text-color`, `--tag-radius`, `--tag-padding`, `--tag-font-size` and friends; the full list is on the [theming page](theming).
 
 ### `InfoTag`
 
@@ -344,7 +343,7 @@ To keep the list and your buttons' hints in sync, describe each shortcut once as
 
 ### `PrevNext`
 
-Sequential navigation with wraparound. Pass `items` as `{ href, label }` objects and the `current` href. A nonempty list must contain `current`. Use `children({ kind, item, index, total })` to customize both links and `between` for content between them. `labels` translates the previous/next headings; `as` changes the wrapper element. Navigation uses ordinary links; apps own keyboard shortcuts, preloading, and router behavior. The links at the bottom of every demo page use this component.
+Sequential navigation with wraparound. Pass `items` as `{ href, label }` objects and the `current` href, which a nonempty list must contain (else it throws). Below `min_items` (default 3) items it renders nothing. Use `children({ kind, item, index, total })` to customize both links and `between` for content between them. `labels` translates the previous/next headings; `as` changes the wrapper element. Navigation uses ordinary links; apps own keyboard shortcuts, preloading and router behavior. The links at the bottom of every demo page use it.
 
 ```svelte example id="prev-next-demo"
 <script lang="ts">
@@ -382,8 +381,7 @@ A card grid using `{ href, label, description, icon? }` objects. Like Footer and
 
 ### `GitHubCorner`
 
-The animated Octocat ribbon, `position: fixed` in a corner of the viewport. The one in the
-top right of this page links to this repo.
+The animated Octocat ribbon, `position: fixed` in a corner of the viewport, like the one at the top right of this page.
 
 ```svelte
 <GitHubCorner href="https://github.com/janosh/svelte-widgets" corner="top-right" />
@@ -393,9 +391,9 @@ Colors come from `--github-corner-bg` and `--github-corner-color` (plus their `-
 
 ### `CodeExample`
 
-The wrapper the [Markdown integration](markdown) mounts around runnable code fences. Configure it through `create_markdown({ examples: { wrapper: ["svelte-widgets", "CodeExample"] } })` and pass that engine to `markdown_vite(engine)`. Every "View code" button on this site uses this component.
+The wrapper the [Markdown integration](markdown) mounts around runnable code fences. Configure it through `create_markdown({ examples: { wrapper: ["svelte-widgets", "CodeExample"] } })` and pass that engine to `markdown_vite(engine)`. Every "View code" button on this site comes from it.
 
-Fence metadata drives it: `collapsible` hides the source behind a button, `code_above` puts the source before the rendered example, and `repl`/`github` accept resolved URLs, for example `github="https://github.com/org/repo/blob/main/src/example.svelte"`. Resolve repository paths in the caller or build configuration; `repo`, `file`, and boolean `github` metadata are no longer supported. `lazy` mounts the example only once it nears the viewport (via [`LazyMount`](#lazymount)), for pages with many heavy examples: set it per fence or for all of them with `create_markdown({ examples: { lazy: true } })`. The placeholder holds `--code-example-lazy-height` (default `350px`).
+Fence metadata drives it: `collapsible` hides the source behind a button, `code_above` (default: `collapsible`) puts the source before the rendered example, and `repl`/`github` accept resolved URLs, for example `github="https://github.com/org/repo/blob/main/src/example.svelte"`. Resolve repository paths in the caller or build config; `repo`, `file` and boolean `github` metadata are unsupported. `lazy` mounts the example only once it nears the viewport (via [`LazyMount`](#lazymount)), for pages with many heavy examples: set it per fence or for all of them with `create_markdown({ examples: { lazy: true } })`. The placeholder holds `--code-example-lazy-height` (default `350px`).
 
 ### `LazyMount`
 

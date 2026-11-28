@@ -90,7 +90,7 @@ Return non-interactive content such as text, icons, `<code>`, or styled spans. U
 
 ## Controlled mobile menu
 
-Use `bind:open` to control the mobile menu. `children({ open, panel_id, routes })` adds content after the routes. `on_open` and `on_close` observe transitions, and `on_navigate({ href, event, route })` can return `false` to cancel navigation.
+Use `bind:open` to control the mobile menu. `children({ open, panel_id, routes })` adds content after the routes. `on_open({ via })` and `on_close({ via })` observe transitions: `trigger` is the burger button, `escape`, `pointer` a press outside, `select` a followed link and `programmatic` a change to the bound `open`, and `on_navigate({ href, event, route })` can return `false` to cancel navigation.
 
 ```svelte example id="nav-controlled" collapsible
 <script lang="ts">
@@ -126,11 +126,12 @@ Use `bind:open` to control the mobile menu. `children({ open, panel_id, routes }
 
 ## Breakpoint and styling
 
-`breakpoint` defaults to 767 pixels. Use `breakpoint={0}` for desktop navigation at every width or a larger threshold for the mobile layout. `dropdown_column_threshold` controls when desktop submenus use two columns.
+`breakpoint` defaults to 767 pixels. Use `breakpoint={0}` for desktop navigation at every width or a larger threshold for the mobile layout. Desktop submenus switch to two columns above `dropdown_column_threshold` items (default 10, counting child links and section headings).
 
 ```css
 nav {
-  --nav-border-radius: 6pt;
+  --nav-margin: 0 auto; /* default -0.75em auto 1.25em */
+  --nav-radius: 6pt;
   --nav-link-bg-hover: rgba(255, 255, 255, 0.1);
   --nav-link-active-color: mediumseagreen;
   --nav-dropdown-bg: var(--surface-bg);

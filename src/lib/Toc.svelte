@@ -3,17 +3,13 @@
   import { untrack } from 'svelte'
   import type { SVGAttributes, SvelteHTMLElements } from 'svelte/elements'
   import { blur, type BlurParams } from 'svelte/transition'
-  import type {
-    CollapseMode,
-    OpenChangeHandler,
-    OpenChangeVia,
-    TocHeadingData,
-  } from './types'
+  import type { CollapseMode, TocCloseVia, TocHeadingData, TocOpenVia } from './types'
   import { create_key_selector } from './internal/key-selector.svelte.ts'
   import { flash_toc_target, get_heading_visibility } from './toc-utils'
   import { is_editable_event_target, is_modified_click } from './shortcuts'
   import { override_style } from './attachments/shared'
   import { fragment_href } from './heading-anchors'
+  import { track_open } from './internal/open-state.svelte.ts'
 
   let {
     active_heading = $bindable(null),
@@ -55,7 +51,8 @@
     title_snippet,
     toc_item,
     footer,
-    on_open_change,
+    on_open,
+    on_close,
     aside_props = {},
     nav_props = {},
     title_props = {},
@@ -112,7 +109,10 @@
     toc_item?: Snippet<[TocHeadingData]>
     // Supplemental navigation inside the same desktop/mobile panel.
     footer?: Snippet
-    on_open_change?: OpenChangeHandler
+    // Panel transitions with their cause: `trigger` the toggle button, `pointer` a click outside,
+    // `select` a ToC item, `escape`, `tab`, or `programmatic` for a bound `open` change.
+    on_open?: (detail: { via: TocOpenVia; desktop: boolean }) => void
+    on_close?: (detail: { via: TocCloseVia; desktop: boolean }) => void
     aside_props?: SvelteHTMLElements[`aside`]
     nav_props?: SvelteHTMLElements[`nav`]
     title_props?: SvelteHTMLElements[`h2`]
@@ -149,7 +149,6 @@
   let scroll_target_timeout: ReturnType<typeof setTimeout> | undefined
   // Infinity so the first scroll event always passes the "distance increasing" check
   let prev_scroll_target_distance = Infinity
-  let last_reported_open: boolean | undefined = undefined
   let discovered_items: TocHeadingData[] = $state([])
   // rows are keyed by id and `#id` only reaches the first match, so keep each id's first entry
   function first_per_id<T extends { id: string }>(entries: Iterable<T>): T[] {
@@ -174,12 +173,12 @@
     prev_scroll_target_distance = Infinity
   }
 
-  function set_open(value: boolean, via: OpenChangeVia) {
-    if ((last_reported_open ?? open) === value) return
-    last_reported_open = value
-    open = value
-    on_open_change?.({ open: value, desktop, via })
-  }
+  const change_open = track_open<TocOpenVia, TocCloseVia>(
+    () => open,
+    (value) => (open = value),
+    () => on_open && (({ via }) => on_open?.({ via, desktop })),
+    () => on_close && (({ via }) => on_close?.({ via, desktop })),
+  )
 
   type LiEvent = (MouseEvent | KeyboardEvent) & {
     currentTarget: EventTarget & HTMLLIElement
@@ -238,15 +237,20 @@
   $effect(() => {
     desktop = window_width > breakpoint
   })
+  // The server can't know the window width, so it renders the desktop panel. Until hydration a
+  // media query hides it below the breakpoint, and the first mobile switch skips the blur:
+  // otherwise narrow windows see the panel flash and fade out on load.
+  const toc_id = $props.id()
+  const style_tag = `style` // a literal tag in the template would end this component's styles
+  let hydrated = $state(false)
+  let animate_nav = false // plain: read when a transition starts, not tracked
   $effect(() => {
-    const current_open = open
-    if (current_open === last_reported_open) return
-    untrack(() => {
-      last_reported_open = current_open
-      on_open_change?.({ open: current_open, desktop, via: `programmatic` })
-    })
+    hydrated = true
+    const frame = requestAnimationFrame(() => (animate_nav = true))
+    return () => cancelAnimationFrame(frame)
   })
-
+  const nav_blur = (node: Element) =>
+    blur(node, animate_nav && blur_params !== null ? blur_params : { duration: 0 })
   $effect(() => {
     void headings // heading changes can move the aside; check_toc_overlap reads the rest
     check_toc_overlap()
@@ -254,7 +258,7 @@
 
   const close = (event: MouseEvent) => {
     if (!(event.target instanceof Node) || !aside?.contains(event.target)) {
-      set_open(false, `outside-click`)
+      change_open(false, `pointer`)
     }
   }
 
@@ -603,7 +607,7 @@
         if (temporary) anchor.remove()
       }
     }
-    set_open(false, `toc-item`)
+    change_open(false, `select`)
   }
 
   function scroll_to_active_toc_item(behavior: `auto` | `smooth` | `instant` = `smooth`) {
@@ -631,7 +635,7 @@
     if (!react_to_keys || !react_to_keys.includes(event.key)) return
 
     const toc_has_focus = nav?.contains(document.activeElement)
-    const is_open = last_reported_open ?? open
+    const is_open = open
 
     if (
       // ignore keyboard events when ToC is closed on mobile or inactive on desktop. :hover
@@ -646,7 +650,7 @@
     if (event.key !== `Escape` && document.activeElement?.closest(`[data-toc-footer]`))
       return
     if (event.key === `Tab`) {
-      if (toc_has_focus) set_open(false, `tab`)
+      if (toc_has_focus) change_open(false, `tab`)
       return
     }
     const focused = document.activeElement
@@ -661,7 +665,7 @@
       // nothing to close on desktop, so leave the key to e.g. an open dialog
       if (!is_open) return
       event.preventDefault()
-      set_open(false, `escape`)
+      change_open(false, `escape`)
       return
     }
     // Navigation must not consume keys owned by outside controls; Escape/Tab are handled above.
@@ -731,6 +735,7 @@
   class:hidden={hide}
   class:intersecting={is_overlapping_hide_target}
   class:mobile={!desktop}
+  data-toc-pending={hydrated ? undefined : toc_id}
   bind:this={aside}
   hidden={hide}
   aria-hidden={hide || is_overlapping_hide_target}
@@ -740,6 +745,9 @@
     node.toggleAttribute(`inert`, is_overlapping_hide_target)
   }}
 >
+  {#if !hydrated}
+    {@html `<${style_tag}>@media (max-width: ${Number(breakpoint)}px) { [data-toc-pending="${toc_id}"] > nav { display: none } }</${style_tag}>`}
+  {/if}
   <!-- the toggle stays mounted and becomes the close button: unmounting it left touch users
   no visible way out, only an outside click, Escape or a tab-out -->
   {#if !desktop && (heading_data.length >= min_items || footer)}
@@ -750,7 +758,7 @@
         if (event.defaultPrevented) return
         event.stopPropagation()
         event.preventDefault()
-        set_open(!open, `button`)
+        change_open(!open, `trigger`)
       }}
       type="button"
       aria-expanded={open}
@@ -779,11 +787,7 @@
     </button>
   {/if}
   {#if open || (desktop && (heading_data.length >= min_items || footer))}
-    <nav
-      {...nav_props}
-      transition:blur={blur_params === null ? { duration: 0 } : blur_params}
-      bind:this={nav}
-    >
+    <nav {...nav_props} transition:nav_blur bind:this={nav}>
       {#if title_snippet}
         {@render title_snippet()}
       {:else if title}
@@ -807,6 +811,7 @@
           <li
             {...li_props}
             class:active={is_active}
+            class:guessed={!hydrated && idx === 0}
             class:collapsed
             aria-hidden={collapsed || undefined}
             aria-current={toc_item && is_active ? `location` : undefined}
@@ -849,14 +854,13 @@
   @keyframes toc-flash {
     0%,
     30% {
-      color: var(--toc-flash-color, var(--accent, #6495ed));
+      color: var(
+        --toc-flash-color,
+        var(--accent-color, light-dark(#4a7abf, cornflowerblue))
+      );
     }
   }
   :where(aside.toc) {
-    /* mirrors Nav's --nav-link-bg-hover / --nav-border-radius so ToC and Nav rows share one
-       hover language. Fallbacks only — the public --toc-li-* tokens still win. */
-    --toc-item-hover-bg: light-dark(rgba(70, 70, 140, 0.2), rgba(120, 170, 255, 0.2));
-    --toc-item-radius: 3pt;
     /* shared by the mobile panel and its toggle; values match Nav's --nav-surface-* */
     --toc-surface-border: 1px solid
       light-dark(rgba(128, 128, 128, 0.25), rgba(200, 200, 200, 0.2));
@@ -898,7 +902,7 @@
     color: var(--toc-li-color);
     background: var(--toc-li-bg);
     border: var(--toc-li-border);
-    border-radius: var(--toc-li-border-radius, var(--toc-item-radius));
+    border-radius: var(--toc-li-radius, 3pt);
     margin: var(--toc-li-margin);
     padding: var(--toc-li-padding, 2pt 4pt);
     font: var(--toc-li-font);
@@ -938,14 +942,32 @@
     text-shadow: var(--toc-active-text-shadow);
     border: var(--toc-active-border);
     border-width: var(--toc-active-border-width);
-    border-radius: var(--toc-active-border-radius, var(--toc-item-radius));
+    border-radius: var(--toc-active-radius, var(--toc-li-radius, 3pt));
+  }
+  /* Picking the active heading needs the client, so the server-rendered list highlights its
+     first item (`.guessed`, until hydration): right whenever the page opens at its top. A URL
+     targeting an element scrolls past it, so then nothing is guessed; a reload restoring a
+     scroll position still shows the guess until hydration. Its own rule: in a selector list,
+     a browser without :has() would also drop `.active`. */
+  :global(:root:not(:has(:target))) aside.toc > nav > ol > li.guessed {
+    background: var(--toc-active-bg);
+    color: var(--toc-active-color);
+    font: var(--toc-active-li-font);
+    text-shadow: var(--toc-active-text-shadow);
+    border: var(--toc-active-border);
+    border-width: var(--toc-active-border-width);
+    border-radius: var(--toc-active-radius, var(--toc-li-radius, 3pt));
   }
   /* must follow `.active`: equal specificity, so source order decides whether the active
      row (the likeliest hover target) keeps its hover fill. An unset --toc-active-bg made
      `background` invalid there and swallowed the fill entirely. */
   aside.toc > nav > ol > li:hover {
     color: var(--toc-li-hover-color);
-    background: var(--toc-li-hover-bg, var(--toc-item-hover-bg));
+    /* mirrors Nav's --nav-link-bg-hover so ToC and Nav rows share one hover language */
+    background: var(
+      --toc-li-hover-bg,
+      light-dark(rgba(70, 70, 140, 0.2), rgba(120, 170, 255, 0.2))
+    );
   }
   /* an unset --toc-li-hover-color is guaranteed-invalid, so the rule above computes `color`
      to inherited text instead of dropping out, wiping the accent off the active row on
@@ -966,7 +988,7 @@
     right: var(--toc-mobile-btn-right, 0);
     z-index: var(--toc-mobile-btn-z-index, 2);
     border: var(--toc-mobile-btn-border, var(--toc-surface-border));
-    border-radius: var(--toc-mobile-btn-border-radius, 3pt);
+    border-radius: var(--toc-mobile-btn-radius, 3pt);
     background: var(--toc-mobile-btn-bg, var(--toc-mobile-bg, rgba(255, 255, 255, 0.2)));
     color: var(--toc-mobile-btn-color, var(--text-color, black));
     box-shadow: var(--toc-mobile-btn-shadow, var(--toc-surface-shadow));
@@ -1046,7 +1068,7 @@
     /* --toc-font-size shrinks the desktop column to fit beside the content; the floating
        panel has no such constraint and is read at arm's length, so it matches Nav's menu */
     font-size: var(--toc-mobile-font-size, 1rem);
-    border-radius: var(--toc-mobile-border-radius, 6pt);
+    border-radius: var(--toc-mobile-radius, 6pt);
     box-sizing: border-box;
     background: var(--toc-mobile-bg, white);
     width: var(--toc-mobile-width, 18em);

@@ -8,13 +8,14 @@
   import { escape_layer } from './attachments/shared'
   import { create_find_state, type FindOptions } from './find-in-page.svelte.ts'
   import Icon from './Icon.svelte'
-  import { merge_defaults, FIND_BAR_LABELS, type FindBarLabels } from './labels'
+  import { merge_defaults, FIND_BAR_LABELS } from './labels'
 
   type Props = Omit<HTMLAttributes<HTMLDivElement>, `children`> &
     FindOptions & {
       // Search root; undefined until the container mounts.
       root?: Element
-      on_close: () => void
+      // `close` the close button, `escape` the Escape key
+      on_close: (detail: { via: `close` | `escape` }) => void
       // Region name for placeholder and accessible labels.
       label?: string
       // `labels` itself comes from FindOptions, which reads the status strings out of it
@@ -79,7 +80,11 @@
   aria-label={find_label}
   role="search"
   class={[`find-bar`, rest.class]}
-  {@attach (node) => escape_layer(on_close, { consume: true, while_focused: node })}
+  {@attach (node) =>
+    escape_layer(() => on_close({ via: `escape` }), {
+      consume: true,
+      while_focused: node,
+    })}
 >
   <Icon icon={Search} class="find-icon" />
   <input
@@ -105,7 +110,7 @@
   <button
     aria-label={msg.close(label)}
     class="find-close"
-    onclick={on_close}
+    onclick={() => on_close({ via: `close` })}
     title={msg.close_shortcut}
     type="button"
     {@attach tooltip()}>×</button

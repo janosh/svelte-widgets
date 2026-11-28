@@ -1,5 +1,5 @@
 import type { Attachment } from 'svelte/attachments'
-import type { Placement } from '../position'
+import type { Placement, PositionOptions } from '../position'
 import { clamp } from '../utils'
 import { compute_position } from '../position'
 import { auto_update_position } from './float'
@@ -8,23 +8,22 @@ import { css_px, escape_layer } from './shared'
 export type TooltipTrigger = `hover-focus` | `hover` | `focus`
 export type TooltipWrap = `balance` | `normal` | `nowrap`
 export type TooltipStrategy = `top-layer` | `fixed` | `absolute`
-export type TooltipOpenVia = `pointer` | `focus` | `blur` | `escape` | `visibility`
+export type TooltipOpenVia = `pointer` | `focus`
+// `visibility`: the trigger was hidden, disconnected or lost its content
+export type TooltipCloseVia = `pointer` | `blur` | `escape` | `visibility`
 
-export type TooltipOpenDetail = {
-  trigger: HTMLElement
-  via: TooltipOpenVia
-}
+export type TooltipOpenDetail = { trigger: HTMLElement; via: TooltipOpenVia }
+export type TooltipCloseDetail = { trigger: HTMLElement; via: TooltipCloseVia }
 
 export interface TooltipOptions {
   content?: string | ((trigger: HTMLElement) => string)
   placement?: Placement | `auto`
-  align?: `center` | `start` | `end`
-  fallback_placements?: Placement[]
+  align?: PositionOptions[`align`]
   offset?: number
   cross_axis_offset?: number
   viewport_padding?: number
   boundary?: Element | `viewport`
-  flip?: boolean
+  flip?: PositionOptions[`flip`]
   shift?: boolean
   strategy?: TooltipStrategy
   wrap?: TooltipWrap
@@ -34,7 +33,8 @@ export interface TooltipOptions {
   open_delay_ms?: number
   close_delay_ms?: number
   skip_delay_ms?: number
-  on_open_change?: (open: boolean, detail: TooltipOpenDetail) => void
+  on_open?: (detail: TooltipOpenDetail) => void
+  on_close?: (detail: TooltipCloseDetail) => void
   // Never opens, but still holds the trigger's title so no native tooltip shows instead.
   // Toggling it re-attaches, which closes a tooltip that is open.
   disabled?: boolean
@@ -495,7 +495,6 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       offset: options.offset ?? 12,
       align: options.align,
       cross_axis_offset: options.cross_axis_offset,
-      fallback_placements: options.fallback_placements,
       flip: options.flip,
       shift: options.shift,
       padding: viewport_padding,
@@ -513,7 +512,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   }
 
   function hide_active(
-    via: TooltipOpenVia,
+    via: TooltipCloseVia,
     { dismiss = false, notify = true }: HideOptions = {},
   ): void {
     const closing = active
@@ -535,10 +534,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     }
     if (was_open) last_closed_at = Date.now()
     if (was_open && notify)
-      closing.registration.options.on_open_change?.(false, {
-        trigger: closing.trigger,
-        via,
-      })
+      closing.registration.options.on_close?.({ trigger: closing.trigger, via })
   }
 
   // A custom element can restore `title` from attributeChangedCallback, so strip until it
@@ -642,7 +638,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     ]
     // before positioning, which may hide again and must report a close that follows an
     // open rather than one out of nowhere
-    options.on_open_change?.(true, { trigger: opening.trigger, via })
+    options.on_open?.({ trigger: opening.trigger, via })
     position_active()
   }
 
@@ -684,7 +680,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     reason: `pointer` | `focus`,
   ): void => {
     // One surface serves the document, so the newest interaction takes it; a previous
-    // tooltip is preempted like any other and hears the close via on_open_change.
+    // tooltip is preempted like any other and hears the close via on_close.
     if (active && (active.registration !== registration || active.trigger !== trigger))
       hide_active(CLOSE_REASON[reason])
     remember_and_strip_title(registration, trigger)

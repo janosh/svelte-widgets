@@ -3,7 +3,7 @@
   import { default_highlighter } from '#lib/highlight/index.ts'
 
   let {
-    value = $bindable(``),
+    value = $bindable(),
     language,
     label,
     rows = 13,

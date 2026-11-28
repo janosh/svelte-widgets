@@ -37,6 +37,6 @@
 <style>
   progress {
     width: 100%;
-    accent-color: var(--accent-color, #4e79a7);
+    accent-color: var(--accent-color, light-dark(#4a7abf, cornflowerblue));
   }
 </style>

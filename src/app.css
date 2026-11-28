@@ -1,12 +1,12 @@
 /* starry-night syntax highlighting (GitHub-style), following the page's color-scheme */
 @import './lib/highlight/theme.css';
+@import './lib/heading-anchors.css';
 
 :root {
-  --accent: light-dark(#4a7abf, cornflowerblue);
-  --accent-hover: orange;
+  --accent-color: light-dark(#4a7abf, cornflowerblue);
+  --accent-hover-color: orange;
   --main-max-width: 50em;
-  --toc-width: 18rem;
-  --nav-link-active-color: var(--accent);
+  --nav-link-active-color: var(--accent-color);
   --bg: light-dark(#fafafa, #141418);
   --text-color: light-dark(#222, #ccc);
   --text-color-muted: light-dark(#666, #999);
@@ -23,7 +23,8 @@ html {
   color-scheme: dark light;
 }
 body {
-  --page-pad: clamp(1rem, 3vw, 2rem);
+  /* phones keep 1rem; wider windows get up to 6rem */
+  --page-pad: clamp(1rem, 10vw - 1.5rem, 6rem);
   margin: 0;
   padding: var(--page-pad) var(--page-pad) 0;
   font-family: system-ui, -apple-system, sans-serif;
@@ -49,8 +50,9 @@ body > div {
   gap: 0.35rem;
   max-width: var(--main-max-width);
   margin: 0 auto 1.5rem;
+  /* a variable, not a `nav` rule: that would tie Nav's own and differ between SSR and hydration */
+  --nav-margin: 0;
   nav {
-    margin: 0;
     .menu {
       place-content: start;
       padding: 0;
@@ -75,29 +77,44 @@ body > div {
   --toc-li-font-size-min: 0.9em;
   --toc-min-width: 0;
   --toc-mobile-bg: light-dark(#fff, #222226);
-  --toc-active-color: var(--accent);
+  --toc-active-color: var(--accent-color);
   display: grid;
-  gap: 2rem;
-  align-items: start;
-  max-width: calc(var(--main-max-width) + 2rem + var(--toc-width));
+  gap: 1.25rem;
+  /* first lines share a baseline, so a page's title sits level with the TOC title */
+  align-items: baseline;
+  max-width: var(--main-max-width);
   margin: 0 auto 3em;
   flex: 1;
   @media (min-width: 1100px) {
     &:has(aside.toc > nav) {
-      grid-template-columns: minmax(0, 1fr) var(--toc-width);
+      /* text and TOC as one centered block, the TOC only as wide as its entries, so the
+         space left of the text matches the space right of the TOC */
+      grid-template-columns: minmax(0, var(--main-max-width)) auto;
+      justify-content: center;
+      max-width: none;
     }
   }
   aside.toc a {
     color: inherit; /* Toc uses :where(); else global `a` paints every item accent */
   }
+  aside.toc.desktop {
+    /* Toc's default 3em inset would double the visible gap to the text, and a right inset
+       would unbalance the centered block */
+    --toc-padding: 1em 0 0 0.75em;
+    --toc-width: max-content;
+    --toc-desktop-max-width: 18rem;
+  }
   aside.toc.mobile {
     /* The fixed mobile TOC owns its dimensions and occupies no grid track. */
     margin: 0;
   }
-  main {
-    margin: 0;
+  /* the page itself is the grid item, whether or not it renders a main element */
+  > [data-pagefind-body] {
     /* Keep wide tables/code from expanding the grid beyond the viewport. */
     min-width: 0;
+    main {
+      margin: 0;
+    }
   }
 }
 main {
@@ -105,10 +122,10 @@ main {
   margin: 0 auto 3em;
 }
 a {
-  color: var(--accent);
+  color: var(--accent-color);
   text-decoration: none;
   &:hover {
-    color: var(--accent-hover);
+    color: var(--accent-hover-color);
   }
 }
 button {
@@ -159,7 +176,7 @@ h1 {
   margin-inline-end: 0.4em;
   vertical-align: -0.125em;
   flex-shrink: 0;
-  color: var(--accent);
+  color: var(--accent-color);
 }
 h1 > .heading-icon {
   margin-inline-end: 0;
@@ -170,14 +187,6 @@ h1 > .heading-icon {
 }
 :is(h1, h2, h3, h4, h5, h6) {
   text-wrap-style: balance;
-  /* Build-time and dynamic heading links occupy the same space before hover/focus. */
-  a[aria-hidden='true'] {
-    opacity: 0;
-    transition: opacity 0.2s;
-  }
-  &:is(:hover, :focus-within) a[aria-hidden='true'] {
-    opacity: 1;
-  }
 }
 label {
   font-weight: 600;
@@ -200,7 +209,7 @@ table {
 blockquote {
   margin: 1em 0;
   padding: 0.5em 1em;
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid var(--accent-color);
   background: var(--surface);
   > :first-child {
     margin-top: 0;

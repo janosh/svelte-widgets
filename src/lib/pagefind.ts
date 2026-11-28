@@ -33,8 +33,6 @@ type PagefindSearchCache = {
 export type PagefindLoaderOptions = {
   load_pagefind?: () => Promise<PagefindApi>
   navigate?: (url: string, details: PageSearchNavigateDetails) => unknown
-  pagefind_key?: string
-  pagefind_path?: string
   transform_url?: (url: string) => string
 }
 

@@ -3,12 +3,12 @@
 // webview, a notebook's output iframe). Reading the top frame's origin throws exactly there,
 // so that read is the feature test.
 
-export interface DirectoryPickerOptions {
+interface DirectoryPickerOptions {
   id: string
   mode: `readwrite`
   startIn: FileSystemDirectoryHandle | `downloads`
 }
-export interface SaveFilePickerOptions {
+interface SaveFilePickerOptions {
   id: string
   suggestedName: string
   types?: { accept: Record<string, string[]> }[]

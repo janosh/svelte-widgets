@@ -10,14 +10,13 @@
   import ActionMenu from '../ActionMenu.svelte'
   import Icon from '../Icon.svelte'
   import { tooltip } from '../attachments/index'
-  import { download } from '../browser/index'
+  import { copy_text, download } from '../browser/index'
   import { format_locale, format_num } from '../format'
   import { Columns, Cross, Download, Search as SearchIcon } from '../icons'
   import type { IconData } from '../icons'
   import type { CmdAction, CmdSection } from '../types'
   import {
     clamp,
-    escape_html,
     html_to_text,
     is_plain_object,
     same_while_equal,
@@ -29,23 +28,17 @@
   import DateTimeFormatMenu from './DateTimeFormatMenu.svelte'
   import type {
     CellColor,
-    CellSnippet,
     CellVal,
     ColorStats,
     Column,
     ColumnPrefs,
     ColumnStats,
     DateTimeFormatMode,
-    Pagination,
     PinSide,
     RowData,
     RowId,
-    Search,
-    SortHint,
     SummaryStat,
     TableExportFormat,
-    TableSort,
-    VirtualScroll,
     DataTableProps,
   } from './data-table'
   import { compute_column_stats, NULL_CELL_COLOR, resolve_domain } from './data-table'
@@ -75,18 +68,17 @@
     INTERACTIVE_SELECTOR,
   } from './selection.svelte.ts'
   import type { CellPos, ColumnFilterValue, TableMatrix } from './types'
-  import { type Snippet, tick, untrack } from 'svelte'
+  import { tick, untrack } from 'svelte'
   import { flip } from 'svelte/animate'
-  import type { HTMLAttributes } from 'svelte/elements'
 
   let {
     data: input_data = [],
     columns: given_columns = [],
-    sort_hint = undefined,
+    sort_hint,
     cell,
     controls,
     sort = $bindable([]),
-    default_num_format = undefined,
+    default_num_format,
     // a column's d3 spec when it has one, else locale-aware Intl
     format_number = (num, format) =>
       format ? format_num(num, format) : format_locale(num),
@@ -118,8 +110,7 @@
     selected_ids = $bindable([]),
     visible_rows = $bindable([]),
     hidden_columns = $bindable(),
-    scroll_style,
-    root_style,
+    scroll_props = {},
     show_row_numbers = false,
     allow_better_toggle = false,
     allow_pinning = true,
@@ -652,7 +643,7 @@
   })
   // Scroll vertically only on real overflow. A fractional table height rounds scrollHeight one
   // pixel past clientHeight, which drew a scrollbar with nothing to scroll. CSS can't tell that
-  // apart from a height limit (scroll_style, or a max-height inherited from the parent).
+  // apart from a height limit (scroll_props.style, or a max-height inherited from the parent).
   let y_overflow = $state(true)
   $effect(() => {
     const el = scroll_el
@@ -1125,12 +1116,13 @@
   const cell_selection = cell_range_select(selection, {
     cell_at: (target) => (tbody_el ? cell_in(target, tbody_el) : null),
     cell_text: selected_cell_text,
+    // the copy event already filled the clipboard, so only confirm it
+    on_copy: (text) => void copy_text(text, { write: async () => {} }),
   })
-  const copy_selected_cells = () =>
-    void navigator.clipboard?.writeText(selection.to_tsv(selected_cell_text))
+  const copy_selected_cells = () => void copy_text(selection.to_tsv(selected_cell_text))
   // Every sorted+filtered value of one column (all pages), one per line
   const copy_column_values = (col_id: string) =>
-    void navigator.clipboard?.writeText(
+    void copy_text(
       sorted_data.map((row) => tsv_cell(cell_text(row[key_of_id(col_id)]))).join(`\n`),
     )
 
@@ -1403,7 +1395,7 @@
       label: EXPORT_FILES[format].label,
       action: () => {
         const text = export_sources[format]()
-        if (format === `tsv`) void navigator.clipboard?.writeText(text)
+        if (format === `tsv`) void copy_text(text)
         else download(text, `${export_filename}.${format}`, EXPORT_FILES[format].mime)
         on_export?.({ format, text })
       },
@@ -1506,7 +1498,6 @@
   const table_tooltips = tooltip({
     delegate: `[title], [aria-label]:not([data-no-tooltip]), [data-title]`,
   })
-  let root_styles = $derived(join_styles(rest.style, root_style))
 </script>
 
 <!-- a described header explains itself in a tooltip on hover, keyboard focus or a tap: its own
@@ -1599,7 +1590,6 @@ to the delegated tooltip (otherwise plain text, no extra node) -->
   {@attach table_tooltips}
   {@attach cell_selection}
   {...rest}
-  style={root_styles}
   bind:this={container_el}
   class={[`table-container`, rest.class, { 'cell-dragging': selection.dragging }]}
   data-density={density}
@@ -1706,8 +1696,12 @@ to the delegated tooltip (otherwise plain text, no extra node) -->
   {@render sort_hint_element(`top`)}
 
   <div
-    class={['table-scroll', { 'has-scroll': scroll_style, 'no-y-overflow': !y_overflow }]}
-    style={scroll_style}
+    {...scroll_props}
+    class={[
+      'table-scroll',
+      scroll_props.class,
+      { 'has-scroll': scroll_props.style, 'no-y-overflow': !y_overflow },
+    ]}
     bind:this={scroll_el}
     onscroll={virtual_config ? () => sync_viewport() : undefined}
   >
@@ -1923,7 +1917,8 @@ to the delegated tooltip (otherwise plain text, no extra node) -->
                     style:width="{fraction * 100}%"
                     style:background={col.render_as === `both`
                       ? `currentColor`
-                      : (color.bg ?? `var(--accent-color, #4a9eff)`)}
+                      : (color.bg ??
+                        `var(--accent-color, light-dark(#4a7abf, cornflowerblue))`)}
                   ></span>
                 {/if}
               {/if}
@@ -2142,7 +2137,7 @@ to the delegated tooltip (otherwise plain text, no extra node) -->
     --table-density-padding: 5pt 8pt;
   }
   .table-container {
-    --table-accent: var(--accent-color, #4a9eff);
+    --table-accent: var(--accent-color, light-dark(#4a7abf, cornflowerblue));
     --column-filter-active-color: var(--table-accent);
     --column-filter-panel-bg: var(--table-header-bg, var(--page-bg, Canvas));
     font-size: var(--table-font-size, 0.9em);
@@ -2375,6 +2370,10 @@ to the delegated tooltip (otherwise plain text, no extra node) -->
     z-index: -1;
     background: inherit;
     box-shadow: inherit;
+  }
+  /* the next row would cover the inherited selection outline's bottom edge */
+  td.pinned.cell-selected::before {
+    bottom: 0;
   }
   /* Stripes follow row_attrs' row index, not :nth-child, which the top virtual spacer row
      would flip. The row paints them under cells' own (column color) backgrounds; a pinned

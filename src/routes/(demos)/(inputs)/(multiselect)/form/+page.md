@@ -1,8 +1,8 @@
 ## How to acquire form data in submission handler
 
-This example shows the JavaScript way of handling MultiSelect fields in form submission events. If you're using SvelteKit, you may want to check out [this example](kit-form-actions) to use [form actions](https://svelte.dev/docs/kit/form-actions) instead (which works even in browsers with JS disabled).
+Reading MultiSelect values in a JavaScript submit handler. With SvelteKit, [form actions](https://svelte.dev/docs/kit/form-actions) also work without JS (see [this example](kit-form-actions)).
 
-> Hint: Use <code>JSON.parse()</code> to convert the string value passed to form submit handler back to array.
+> Hint: The submitted value is `JSON.stringify(selected)`, so `JSON.parse()` turns it back into an array (or customize it with `form_serialize`).
 
 ```svelte example id="multiselect-form-data"
 <script lang="ts">

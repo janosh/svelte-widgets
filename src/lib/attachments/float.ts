@@ -46,7 +46,7 @@ export interface FloatOptions extends PositionOptions {
   // a rect covers anchors with no markup: a context menu's pointer position, a text
   // selection, a canvas cell
   anchor?: Element | AnchorRect | null
-  enabled?: boolean
+  disabled?: boolean
   // `fixed` needs no scroll bookkeeping but an ancestor transform clips it; `absolute`
   // survives that, paying page scroll on every update
   strategy?: `fixed` | `absolute`
@@ -61,16 +61,16 @@ export const float =
   (node: Element): (() => void) | undefined => {
     const {
       anchor,
-      enabled = true,
+      disabled = false,
       strategy = `fixed`,
       match_width = false,
       ...position_options
     } = options
-    if (!enabled || !anchor || !(node instanceof HTMLElement)) return undefined
+    if (disabled || !anchor || !(node instanceof HTMLElement)) return undefined
 
     const anchor_element = anchor instanceof Element ? anchor : null
     // every inline value `update` may write, so a node outliving the attachment (a
-    // persistent surface toggled by `enabled`) is handed back as it arrived
+    // persistent surface toggled by `disabled`) is handed back as it arrived
     const original_styles = {
       position: node.style.position,
       left: node.style.left,

@@ -1,8 +1,8 @@
 import Toc from '#lib/Toc.svelte'
 import Heading from '#lib/Heading.svelte'
-import type { CollapseMode, OpenChangeHandler, TocHeadingData } from '#lib/types.ts'
+import type { CollapseMode, TocCloseVia, TocHeadingData, TocOpenVia } from '#lib/types.ts'
 import type { ComponentProps } from 'svelte'
-import { createRawSnippet, tick } from 'svelte'
+import { createRawSnippet, mount, tick, unmount as unmount_component } from 'svelte'
 import {
   afterEach,
   beforeEach,
@@ -177,6 +177,51 @@ describe(`Toc`, () => {
     },
   )
 
+  // the server renders the desktop panel, so until hydration a media query at the breakpoint
+  // hides it on narrow windows instead of letting it flash and fade out
+  test(`hides the server-rendered panel below the breakpoint and guesses the first item until hydration`, async () => {
+    set_headings(6)
+    // mounted without render()'s flush: this checks the markup before effects run
+    const toc = mount(Toc, {
+      target: document.body,
+      // items known up front, as a server render gets them
+      props: {
+        breakpoint: 800,
+        items: Array.from({ length: 6 }, (_, idx) => ({
+          id: `heading-${idx + 1}`,
+          level: 2,
+          title: `Heading ${idx + 1}`,
+        })),
+      },
+    })
+    onTestFinished(() => unmount_component(toc))
+    const aside = doc_query(`aside.toc`)
+    const pending = aside.getAttribute(`data-toc-pending`)
+    expect(pending).toMatch(/\S/u)
+    // the server's list highlights its first item until the client picks the active one
+    const guessed = () =>
+      [...aside.querySelectorAll(`li`)].map((li) => li.classList.contains(`guessed`))
+    expect(guessed()).toEqual([true, false, false, false, false, false])
+    expect(aside.querySelector(`style`)?.textContent).toBe(
+      `@media (max-width: 800px) { [data-toc-pending="${pending}"] > nav { display: none } }`,
+    )
+    await tick()
+    expect([
+      aside.hasAttribute(`data-toc-pending`),
+      aside.querySelector(`style`),
+    ]).toEqual([false, null])
+    expect(guessed()).toEqual(Array(6).fill(false))
+    expect(aside.querySelectorAll(`li.active`)).toHaveLength(1)
+  })
+
+  // mounting below the breakpoint drops the server's desktop panel at once: a blur-out there
+  // is the very flash the pre-hydration style exists to avoid
+  test(`the first switch to mobile on mount skips the panel's blur`, async () => {
+    set_headings(6)
+    await mount_toc({ breakpoint: innerWidth + 1 })
+    // an outro would keep the nav mounted until its blur ends
+    expect(document.querySelector(`aside.toc > nav`)).toBeNull()
+  })
   test(`renders the title as an excluded h2`, async () => {
     await mount_toc({ title: `Custom title` })
     expect(doc_query(`h2.toc-title.toc-exclude`).textContent).toBe(`Custom title`)
@@ -570,31 +615,104 @@ describe(`Toc`, () => {
     },
   )
 
-  test(`on_open_change handler receives open state, desktop state, and via`, async () => {
+  test(`on_open and on_close receive desktop state and via`, async () => {
     set_window_width(1200)
     set_nested_pair()
-    const on_open_change = vi.fn<OpenChangeHandler>()
-    const events = () => on_open_change.mock.calls.map(([event]) => event)
+    const events: unknown[] = []
+    const on_open = (detail: object) => events.push({ open: true, ...detail })
+    const on_close = (detail: object) => events.push({ open: false, ...detail })
 
-    await mount_toc({ on_open_change, open: false })
-    expect(events()).toEqual([{ desktop: true, open: false, via: `programmatic` }])
+    const props = $state<TocProps>({ dynamic: true, on_open, on_close, open: false })
+    render(Toc, props)
+    await tick()
+    // mounting reports nothing; a bound change reports as programmatic
+    expect(events).toEqual([])
+    props.open = true
+    await tick()
+    props.open = false
+    await tick()
 
     set_window_width(600)
     await tick()
     await click(`aside.toc button`)
     press_key(globalThis, `Escape`)
     await tick()
-    // Same-tick open changes should emit each internal cause separately.
+    // changes are reported from an effect, so opening and closing in one tick nets to nothing
     doc_query(`aside.toc button`).click()
     press_key(globalThis, `Escape`)
     await tick()
 
-    expect(events().slice(1)).toEqual([
-      { desktop: false, open: true, via: `button` },
-      { desktop: false, open: false, via: `escape` },
-      { desktop: false, open: true, via: `button` },
+    expect(events).toEqual([
+      { desktop: true, open: true, via: `programmatic` },
+      { desktop: true, open: false, via: `programmatic` },
+      { desktop: false, open: true, via: `trigger` },
       { desktop: false, open: false, via: `escape` },
     ])
+  })
+
+  // each cause of a mobile open/close change, starting from the opposite state
+  const set_open = (open: boolean) => (props: TocProps) => (props.open = open)
+  test.each([
+    { initial: false, via: `trigger`, act: () => click(`aside.toc > button`) },
+    { initial: false, via: `programmatic`, act: set_open(true) },
+    { initial: true, via: `trigger`, act: () => click(`aside.toc > button`) },
+    { initial: true, via: `programmatic`, act: set_open(false) },
+    { initial: true, via: `pointer`, act: () => click(document.body) },
+    { initial: true, via: `select`, act: () => click(`aside.toc > nav > ol > li`) },
+    { initial: true, via: `escape`, act: () => press_key(globalThis, `Escape`) },
+    {
+      initial: true,
+      via: `tab`,
+      act: () => {
+        doc_query(`aside.toc > nav > ol > li > a`).focus()
+        press_key(globalThis, `Tab`)
+      },
+    },
+  ] as const)(
+    `open=$initial reports $via exactly once and nothing on mount`,
+    async ({ initial, via, act }) => {
+      set_headings(2)
+      set_window_width(600)
+      const [on_open, on_close] = [vi.fn(), vi.fn()]
+      const props = $state<TocProps>({ dynamic: true, on_open, on_close, open: initial })
+      render(Toc, props)
+      await tick()
+      expect([on_open.mock.calls, on_close.mock.calls]).toEqual([[], []])
+
+      await act(props)
+      await tick()
+
+      expect(props.open).toBe(!initial)
+      const [fired, silent] = initial ? [on_close, on_open] : [on_open, on_close]
+      expect(fired).toHaveBeenCalledExactlyOnceWith({ desktop: false, via })
+      expect(silent).not.toHaveBeenCalled()
+    },
+  )
+
+  test(`an on_open that closes the ToC again still reports the close`, async () => {
+    set_headings(2)
+    set_window_width(600)
+    const events: unknown[] = []
+    const props: TocProps = $state({
+      dynamic: true,
+      open: false,
+      on_open: ({ via }: { via: TocOpenVia }) => {
+        events.push([`open`, via])
+        props.open = false
+      },
+      on_close: ({ via }: { via: TocCloseVia }) => events.push([`close`, via]),
+    })
+    render(Toc, props)
+    await tick()
+
+    await click(`aside.toc > button`)
+    await tick()
+
+    expect(events).toEqual([
+      [`open`, `trigger`],
+      [`close`, `programmatic`],
+    ])
+    expect(props.open).toBe(false)
   })
 
   test(`mobile button opens the ToC, cross-fades its icon and centres the active item`, async () => {
@@ -846,10 +964,9 @@ describe(`Toc`, () => {
   ] as const)(`$desc`, async ({ key, via }) => {
     set_headings(2)
     set_window_width(600)
-    const on_open_change = vi.fn<OpenChangeHandler>()
+    const on_close = vi.fn()
     const react_to_keys = via === null ? [] : [key]
-    await mount_toc({ open: true, react_to_keys, on_open_change })
-    on_open_change.mockClear()
+    await mount_toc({ open: true, react_to_keys, on_close })
 
     if (via === `tab`) doc_query(`aside.toc > nav > ol > li.active > a`).focus()
     const key_event = press_key(globalThis, key)
@@ -857,12 +974,8 @@ describe(`Toc`, () => {
 
     // Tab must stay un-prevented so focus still leaves the ToC
     expect(key_event.defaultPrevented).toBe(via === `escape`)
-    if (via === null) expect(on_open_change).not.toHaveBeenCalled()
-    else {
-      expect(on_open_change).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ desktop: false, open: false, via }),
-      )
-    }
+    if (via === null) expect(on_close).not.toHaveBeenCalled()
+    else expect(on_close).toHaveBeenCalledExactlyOnceWith({ desktop: false, via })
   })
 
   // the hover check used to scan the whole document for :hover on every keystroke
@@ -1330,10 +1443,9 @@ describe(`Element Prop Bags`, () => {
       setup = set_nested_pair,
     }) => {
       setup()
-      const on_open_change = vi.fn<OpenChangeHandler>()
+      const [on_open, on_close] = [vi.fn(), vi.fn()]
       const full_bag = { ...bag, style: marker_style, 'data-testid': prop_name }
-      await mount_toc({ ...extra_props, on_open_change, [prop_name]: full_bag })
-      on_open_change.mockClear()
+      await mount_toc({ ...extra_props, on_open, on_close, [prop_name]: full_bag })
 
       const element = doc_query(selector)
       expect(element.getAttribute(`style`)).toContain(marker_style)
@@ -1350,7 +1462,7 @@ describe(`Element Prop Bags`, () => {
         expect(bag.onclick).toHaveBeenCalledTimes(`disabled` in bag ? 0 : 1)
       }
       // neither the li click nor the prevented button click toggles the panel
-      expect(on_open_change).not.toHaveBeenCalled()
+      expect([on_open.mock.calls, on_close.mock.calls]).toEqual([[], []])
     },
   )
 
@@ -1377,7 +1489,7 @@ describe(`Element Prop Bags`, () => {
     await mount_toc()
 
     const css = document.head.textContent
-    expect(css.indexOf(`--toc-li-hover-bg`)).toBeGreaterThan(
+    expect(css.indexOf(`--toc-li-hover-bg,`)).toBeGreaterThan(
       css.indexOf(`--toc-active-bg`),
     )
   })

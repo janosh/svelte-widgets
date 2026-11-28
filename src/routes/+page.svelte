@@ -157,7 +157,7 @@
     margin: 0;
     span {
       margin-left: 0.75em;
-      color: var(--accent);
+      color: var(--accent-color);
     }
   }
   .getting-started {
@@ -209,7 +209,7 @@
         justify-content: space-between;
         color: inherit;
         &:hover {
-          color: var(--accent);
+          color: var(--accent-color);
         }
         > span:first-child {
           display: inline-flex;

@@ -1,6 +1,6 @@
 ## Breadcrumbs
 
-A trail of levels from a root to the current page, rendered as `nav[aria-label] > ol` with `aria-current="page"` on the last item. Each item navigates by `href`, by its own `onclick`, or through the component's `on_navigate` callback, so views without URLs (a file browser, a wizard, a dialog) work as well as routed pages. The current item is plain text unless `link_current` keeps it clickable.
+A trail of levels from a root to the current page, rendered as `nav[aria-label] > ol` with `aria-current` on the last item (`page` by default; `aria_current` also takes `location`, `step` or `true`). Each item navigates by `href`, by its own `onclick`, or through the component's `on_navigate` callback, so views without URLs (a file browser, a wizard, a dialog) work as well as routed pages. The current item is plain text unless `link_current` keeps it clickable.
 
 ```svelte example id="breadcrumbs-links"
 <script lang="ts">
@@ -16,12 +16,12 @@ A trail of levels from a root to the current page, rendered as `nav[aria-label] 
 </script>
 
 <Breadcrumbs {items} />
-<Breadcrumbs {items} separator="›" --breadcrumbs-current-color="var(--accent)" />
+<Breadcrumbs {items} separator="›" --breadcrumbs-current-color="var(--accent-color)" />
 ```
 
 ### Callback navigation and collapsing
 
-Without `href`, items render as buttons and `on_navigate(item, index, event)` runs on activation (after the item's own `onclick`, unless that prevented default). With `max_items`, a long trail keeps `items_before` levels at the start (1 by default) and fills the rest from the end, hiding the middle behind an ellipsis button. `max_items` must be at least 2, and `items_before` is capped at `max_items - 1`, so no more than `max_items` levels show. Pressing it expands the trail in place and moves focus to the first revealed level; `expanded` is bindable, so resetting it collapses again.
+`on_navigate(item, index, event)` runs for every activated item after its own `onclick`, unless that prevented default or a modifier click opens the link elsewhere; prevent default there for client-side routing. Items without `href` render as buttons when they have an `onclick` or `on_navigate` is set, else as plain text. With `max_items` (at least 2), a long trail keeps `items_before` levels at the start (default 1, capped at `max_items - 1`) and fills the rest from the end, hiding the middle behind an ellipsis button. Pressing that button expands the trail in place and moves focus to the first revealed level; `expanded` is bindable, so resetting it collapses again.
 
 ```svelte example id="breadcrumbs-callback"
 <script lang="ts">
@@ -50,7 +50,7 @@ Without `href`, items render as buttons and `on_navigate(item, index, event)` ru
 
 ### Custom rendering
 
-`separator` takes a string or a snippet, `item({ item, index, current })` replaces the icon and label inside the default link, button or span, and other attributes land on the `<nav>`, where SvelteKit link options such as `data-sveltekit-preload-data` reach every link. Items carry their own `target`, `rel` and `title`. Extra item fields reach the snippet and `on_navigate`. Restyle the trail with `--breadcrumbs-*` properties such as `--breadcrumbs-gap`, `--breadcrumbs-color`, `--breadcrumbs-current-font-weight`, `--breadcrumbs-item-max-width` (long labels ellipsize) and `--breadcrumbs-wrap: nowrap`.
+`separator` takes a string or a snippet, `item({ item, index, current })` replaces the icon and label inside the default link, button or span, and other attributes land on the `<nav>`, where SvelteKit link options such as `data-sveltekit-preload-data` reach every link. Items carry their own `target`, `rel` and `title`, and extra item fields reach the snippet and `on_navigate`. Restyle the trail with `--breadcrumbs-*` properties such as `--breadcrumbs-gap`, `--breadcrumbs-color`, `--breadcrumbs-current-font-weight`, `--breadcrumbs-item-max-width` (long labels ellipsize) and `--breadcrumbs-wrap: nowrap`.
 
 ```svelte example id="breadcrumbs-snippets"
 <script lang="ts">

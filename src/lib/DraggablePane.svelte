@@ -1,6 +1,10 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
-  import type { HTMLAttributes, HTMLButtonAttributes } from 'svelte/elements'
+  import type {
+    HTMLAttributes,
+    HTMLButtonAttributes,
+    SVGAttributes,
+  } from 'svelte/elements'
   import type { ResizableOptions } from './attachments/index'
   import { click_outside, draggable, resizable, tooltip } from './attachments/index'
   import Icon from './Icon.svelte'
@@ -10,9 +14,10 @@
     DRAGGABLE_PANE_LABELS,
     type DraggablePaneLabels,
   } from './labels'
+  import type { DraggablePaneCloseVia, DraggablePaneOpenVia } from './types'
+  import { track_open } from './internal/open-state.svelte.ts'
   import { chain_handlers } from './utils'
 
-  type CloseVia = `toggle` | `button` | `pointer` | `escape`
   // Handed to both snippets so they can react to pane chrome, e.g. a plot pausing its
   // animation while the pane is dragged over it.
   type PaneState = {
@@ -29,7 +34,7 @@
     toggle_props = {},
     open_icon = Cross,
     closed_icon = Expand,
-    icon_style,
+    icon_props = {},
     offset = { x: 5, y: 5 },
     align = `end`,
     max_width,
@@ -40,6 +45,7 @@
     inside = [],
     resize = `none`,
     position = `absolute`,
+    on_open,
     on_close,
     on_drag_start,
     toggle_btn = $bindable(null),
@@ -55,8 +61,8 @@
     toggle_props?: Omit<HTMLButtonAttributes, `aria-expanded` | `type`>
     open_icon?: IconData
     closed_icon?: IconData
-    // Sizing the bundled icon is the common case; reach for `toggle` only to replace it
-    icon_style?: string
+    // Attributes for the bundled icon, e.g. its size; reach for `toggle` only to replace it
+    icon_props?: Omit<SVGAttributes<SVGSVGElement>, `path` | `stroke` | `viewBox`>
     // Horizontal edge shared by the toggle and pane before dragging.
     align?: `start` | `end`
     // Gap between the aligned edges and below the toggle.
@@ -73,7 +79,8 @@
     resize?: `both` | `width` | `height` | `none`
     // `fixed` escapes overflow-clipping ancestors; height capped to space below top edge
     position?: `absolute` | `fixed`
-    on_close?: (detail: { via: CloseVia }) => void
+    on_open?: (detail: { via: DraggablePaneOpenVia }) => void
+    on_close?: (detail: { via: DraggablePaneCloseVia }) => void
     on_drag_start?: () => void
     toggle_btn?: HTMLButtonElement | null
     pane?: HTMLDivElement | null
@@ -120,22 +127,29 @@
   const gutter = (edge: `right` | `bottom`) =>
     resize_edges.includes(edge) ? `${resize_gutter_px}px` : null
 
-  const close_pane = (via: CloseVia) => {
+  const change_open = track_open<DraggablePaneOpenVia, DraggablePaneCloseVia>(
+    () => open,
+    (value) => (open = value),
+    () => on_open,
+    () => on_close,
+  )
+  const close_pane = (via: DraggablePaneCloseVia) => {
     // display: none drops focus on the body; hand it back to the toggle instead
     if (pane?.contains(document.activeElement)) toggle_btn?.focus()
-    open = false
-    on_close?.({ via })
+    change_open(false, via)
   }
-  const toggle_pane = () => (open ? close_pane(`toggle`) : (open = true))
+  const toggle_pane = () => (open ? close_pane(`trigger`) : change_open(true, `trigger`))
 
   const clamp_to_viewport = (value: number, upper: number) =>
     Math.max(viewport_margin_px, Math.min(value, upper))
 
   // Undragged: under the toggle; fixed panes also stay in the viewport
-  const anchor_position = (): { left: number; top: number } => {
-    if (!toggle_btn) return fallback_position
-    const toggle_rect = toggle_btn.getBoundingClientRect()
-    const pane_width = pane?.getBoundingClientRect().width || default_pane_width_px
+  const anchor_position = (
+    toggle_node: HTMLButtonElement,
+    pane_node: HTMLDivElement,
+  ): { left: number; top: number } => {
+    const toggle_rect = toggle_node.getBoundingClientRect()
+    const pane_width = pane_node.getBoundingClientRect().width || default_pane_width_px
     const [offset_x, offset_y] = [offset.x ?? 5, offset.y ?? 5]
     // the anchor in viewport coordinates; each strategy below restates it in its own space
     const left =
@@ -157,7 +171,7 @@
 
     // The pane's containing block, not the toggle's: the siblings usually share one, but
     // toggle_props can position the toggle independently.
-    const ancestor = pane?.offsetParent
+    const ancestor = pane_node.offsetParent
     // No positioned ancestor means the pane is placed against the document
     if (!ancestor) {
       return { left: left + globalThis.scrollX, top: top + globalThis.scrollY }
@@ -175,9 +189,9 @@
   // --pane-viewport-clamp (min()'d with --pane-max-height in CSS) keeps a fixed pane above the
   // bottom edge and is rewritten on every move, else a reset after a drag plus window resize
   // keeps a stale cap.
-  const position_pane = () => {
+  const position_pane = (toggle_node: HTMLButtonElement) => {
     if (!pane) return
-    const { left, top } = anchor_position()
+    const { left, top } = anchor_position(toggle_node, pane)
     Object.assign(pane.style, { left: `${left}px`, top: `${top}px`, right: `auto` })
     if (position === `fixed`) {
       const available = globalThis.innerHeight - top - viewport_margin_px
@@ -194,7 +208,7 @@
   }
 
   const reanchor = () => {
-    if (open && toggle_btn && !has_been_dragged) position_pane()
+    if (open && toggle_btn && !has_been_dragged) position_pane(toggle_btn)
   }
   $effect(reanchor)
   // Async content, fonts and CSS size changes can move the anchored edges without a
@@ -243,13 +257,13 @@
     // above the toggle: below it the tooltip covers the top of the pane it opens, and beside
     // it the neighboring toolbar buttons; below only when there's no room above
     placement: `top`,
-    fallback_placements: [`bottom`],
+    flip: [`bottom`],
   })}
 >
   {#if toggle}
     {@render toggle(pane_state)}
   {:else}
-    <Icon icon={open ? open_icon : closed_icon} style={icon_style} />
+    <Icon {...icon_props} icon={open ? open_icon : closed_icon} />
   {/if}
 </button>
 
@@ -304,7 +318,7 @@ several panes can be renamed via pane_props -->
     on_resize_reset: () => (resized_max_width = null),
   })}
   {@attach click_outside({
-    enabled: open,
+    disabled: !open,
     inside: [toggle_btn, ...inside],
     escape: true,
     dismiss_on,
@@ -343,7 +357,7 @@ several panes can be renamed via pane_props -->
     )}
     {#if has_been_dragged}
       {@render control(`reset`, msg.reset_position, Reset, reset_position)}
-      {@render control(`close`, msg.close_pane, Cross, () => close_pane(`button`))}
+      {@render control(`close`, msg.close_pane, Cross, () => close_pane(`close`))}
     {/if}
   </div>
   <div class="pane-content">
@@ -365,7 +379,7 @@ several panes can be renamed via pane_props -->
     display: flex;
     place-items: center;
     padding: var(--pane-toggle-padding, 2pt);
-    border-radius: var(--pane-toggle-border-radius, var(--border-radius, 3pt));
+    border-radius: var(--pane-toggle-radius, var(--border-radius, 3pt));
     background-color: transparent;
     transition: var(--pane-toggle-transition, background-color 0.2s);
     font-size: var(--pane-toggle-font-size, 0.875rem);
@@ -391,7 +405,7 @@ several panes can be renamed via pane_props -->
       --pane-border,
       1px solid light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.15))
     );
-    border-radius: var(--pane-border-radius, var(--border-radius, 3pt));
+    border-radius: var(--pane-radius, var(--border-radius, 3pt));
     /* light-dark() takes colors only: one shadow layer per theme, transparent in the other */
     box-shadow: var(
       --pane-box-shadow,
@@ -477,6 +491,66 @@ several panes can be renamed via pane_props -->
         stroke: currentColor;
         stroke-width: 1.5;
         stroke-linecap: round;
+      }
+    }
+  }
+  /* Defaults for the caller's controls, so global. `.draggable-pane :where(x)` is (0,1,0):
+     above a host's bare `button {}`, below component styles like SettingsSection's h4 (0,1,1)
+     or reset button (0,2,0), whatever order the stylesheets load in. A hashed
+     div.draggable-pane would reach (0,2,1) and beat those. */
+  :global {
+    .draggable-pane {
+      :where(h4) {
+        margin: var(--pane-h4-margin, 2pt 0);
+        font-size: var(--pane-h4-font-size, 0.95em);
+      }
+      :where(hr) {
+        border: none;
+        background: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.1));
+        margin: 4pt 0;
+        height: 1px;
+      }
+      :where(label) {
+        display: inline-flex;
+        align-items: center;
+        gap: 2pt;
+      }
+      :where(button) {
+        background-color: var(
+          --btn-bg,
+          light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.1))
+        );
+      }
+      :where(button:hover) {
+        background-color: var(
+          --btn-bg-hover,
+          light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.2))
+        );
+      }
+      :where(.pane-content button) {
+        font-size: 1em;
+        padding: 3px 6px;
+      }
+      :where(table) {
+        width: 100%; /* no blank strip beside a table */
+      }
+    }
+    /* fields at (0,0,0): a caller's own field sizing (say, for settings grid rows) wins at
+       any specificity, not only when its stylesheet happens to load after this one */
+    :where(.draggable-pane) {
+      /* native row inputs fill the row; composite widgets manage their own fields */
+      :where(label > input[type='text'], .setting > input[type='text']) {
+        flex: 1;
+        line-height: normal; /* not the pane's 1.5: a text box no taller than its text */
+        padding: 2px 6px;
+        margin: 0 0 0 5pt;
+      }
+      :where(select) {
+        margin: 0 0 0 5pt;
+        flex: 1;
+        border-radius: 3px;
+        padding: 2px 4px;
+        font-size: 0.8em;
       }
     }
   }

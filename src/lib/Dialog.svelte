@@ -7,9 +7,11 @@
     track_backdrop_dismiss,
     type DialogCloseVia,
     type DialogControls,
+    type DialogOpenVia,
     type DialogProps,
     type DialogTriggerProps,
   } from './dialog'
+  import { track_open } from './internal/open-state.svelte.ts'
   import { chain_handlers } from './utils'
 
   const unique_id = $props.id()
@@ -22,6 +24,7 @@
     header,
     footer,
     children,
+    on_open,
     on_close,
     id,
     closedby = `any`,
@@ -32,9 +35,15 @@
 
   const dialog_id = $derived(id ?? unique_id)
   let focus_origin: HTMLElement | SVGElement | null = null
-  let pending_close_via: DialogCloseVia | null = null
+  let pending_close_via: Exclude<DialogCloseVia, `programmatic`> | null = null
+  const change_open = track_open<DialogOpenVia, DialogCloseVia>(
+    () => open,
+    (value) => (open = value),
+    () => on_open,
+    () => on_close,
+  )
 
-  const close = (via: DialogCloseVia) => {
+  const close = (via: Exclude<DialogCloseVia, `programmatic`>) => {
     if (!open) return
     if (!surface) throw new Error(`Dialog: cannot close without a mounted surface`)
     // Browsers fire `close` a task later, so `open` lags a surface that is already shut: a
@@ -45,7 +54,7 @@
   }
   const controls: DialogControls = { close: () => close(`close`) }
   const trigger_props: DialogTriggerProps = $derived({
-    onclick: () => (open = true),
+    onclick: () => change_open(true, `trigger`),
     'aria-controls': open ? dialog_id : undefined,
     'aria-expanded': open,
     'aria-haspopup': `dialog`,
@@ -107,14 +116,14 @@
     onclose={chain_handlers((event) => {
       // Ignore a queued close from a surface replaced by a rapid controlled reopen.
       if (open && event.currentTarget !== surface) return
-      const was_open = open
+      // a controlled close already left `open` false: change_open skips it, and the bound
+      // prop's change reports itself as `programmatic`
       const close_via = pending_close_via ?? `close`
       pending_close_via = null
       backdrop.reset()
-      open = false
+      change_open(false, close_via)
       // Explicit restoration also covers removed openers and partial DOM implementations.
       restore_dialog_focus(surface, focus_origin)
-      if (was_open) on_close?.({ via: close_via })
     }, rest.onclose)}
   >
     {#if header}<header>{@render header(controls)}</header>{/if}

@@ -4,7 +4,7 @@ Render a large array while mounting only visible rows plus a small overscan. Row
 
 ### Minimal example
 
-Set a viewport height and render a row through `children(item, idx)`. The index is its position in the complete array, not its position within the visible window.
+Set a viewport height and render rows through `children(item, idx)`, where `idx` indexes the complete array, not the visible window.
 
 ```svelte example id="virtual-list-basic"
 <script lang="ts">
@@ -28,7 +28,7 @@ Set a viewport height and render a row through `children(item, idx)`. The index 
 
 ### Filtering and jumping to a row
 
-Use stable keys when filtering or reordering items. `scroll_to_index` reveals a zero-based index, clamped to the available range. Reset to the first row after changing a filter so a prior scroll position cannot hide a shorter result set.
+Use stable keys when filtering or reordering items. `scroll_to_index` reveals a zero-based integer index (clamped to the range; non-integers throw). Reset to the first row after changing a filter so a prior scroll position can't hide a shorter result set.
 
 ```svelte example id="virtual-list-filter"
 <script lang="ts">
@@ -90,8 +90,8 @@ Use stable keys when filtering or reordering items. `scroll_to_index` reveals a 
 | `bind:element`           | Access the scrolling div for DOM integration.                                      |
 | `scroll_to_index(idx)`   | Component method exposed through `bind:this`.                                      |
 
-The container defaults to a maximum height of `20rem`. For a taller viewport, override both `height` and `max-height`, for example with `style="height: 40rem; max-height: none"`. `virtual_window` from `svelte-widgets/virtual` exposes the same window calculation for custom table/grid markup. Fetching, request errors and loading indicators belong outside the list; use [MultiSelect loading recipes](infinite-scroll) for paged option loading.
+The container defaults to `max-height: 20rem`; for a taller viewport override both, e.g. `style="height: 40rem; max-height: none"`. `virtual_window` from `svelte-widgets/virtual` exposes the same window calculation for custom table/grid markup. Fetching, request errors and loading indicators belong outside the list; use [MultiSelect loading recipes](infinite-scroll) for paged option loading.
 
 ### Keyboard and accessibility
 
-`tabindex="0"` in these examples makes the scroll area keyboard-focusable for native arrow and Page Up/Down scrolling. VirtualList does not implement row selection or roving focus. Only mounted rows exist in the accessibility tree and browser find results; provide filtering or a non-virtualized alternative when users need to inspect every record at once. Keep application state outside row snippets because offscreen rows unmount.
+`tabindex="0"` in these examples makes the scroll area keyboard-focusable for native arrow and Page Up/Down scrolling. VirtualList does not implement row selection or roving focus. Only mounted rows exist in the accessibility tree and browser find, so offer filtering or a non-virtualized view when users must inspect every record. Keep application state outside row snippets, since offscreen rows unmount.

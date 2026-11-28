@@ -2,7 +2,7 @@
 
 Keeps a scroll container pinned to the end of growing content, such as a streaming chat or a log tail, until the reader scrolls away, and re-pins once they scroll back within `threshold` px. Only real input (wheel, touch, scroll keys, a scrollbar drag) detaches: layout shifts emit scroll events too, and those never unpin it. While the reader selects text the view holds still, and finishing with a selection detaches.
 
-`create_stick_to_bottom(options)` returns a reactive controller: attach it with `{@attach stick.attach}`, read `stuck`, `distance` and `far_from_end` to show a "jump to latest" button, call `scroll_to_end()` to re-pin, and set `stuck = false` before a programmatic jump away (or before attaching, to start detached). Growth is detected through a subtree `MutationObserver` and the container's own size; `observe_children` also watches each child's size for growth DOM mutations miss (images loading, `<details>` opening). With `observe_mutations: false`, call `follow()` yourself after content changes, e.g. from an `$effect` on the data.
+`create_stick_to_bottom(options)` returns a reactive controller: attach it with `{@attach stick.attach}`, read `stuck`, `distance` (px left to the end) and `far_from_end` to show a "jump to latest" button, call `scroll_to_end()` to re-pin, and set `stuck = false` before a programmatic jump away (or before attaching, to start detached). Growth is detected through a subtree `MutationObserver` and the container's own size; `observe_children` also watches each child's size for growth DOM mutations miss (images loading, `<details>` opening). With `observe_mutations: false`, call `follow()` yourself after content changes, e.g. from an `$effect` on the data.
 
 ```svelte example id="attachments-stick-to-bottom"
 <script lang="ts">
@@ -22,8 +22,11 @@ Keeps a scroll container pinned to the end of growing content, such as a streami
 </script>
 
 <div style="position: relative">
+  <!-- a scrollable region takes focus so keyboards can scroll it -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <pre
     {@attach stick.attach}
+    role="region"
     tabindex="0"
     aria-label="Streaming log"
     style="height: 12em; overflow: auto; margin: 0; padding: 0.5em; border: 1px solid gray; border-radius: 4pt">{lines.join(
@@ -44,4 +47,4 @@ Keeps a scroll container pinned to the end of growing content, such as a streami
 </p>
 ```
 
-Options: `threshold` (px from the end still counted as at it), `far_threshold`, `behavior` (`instant` or `smooth`), `observe_mutations`, `observe_children`, `on_scroll(event)` and `hold_position()`, which runs instead of following while detached, for containers that keep their own scroll anchor.
+Options: `threshold` (px from the end still counted as at it, default 40), `far_threshold` (when `far_from_end` turns true, default one viewport), `behavior` (`instant` by default, or `smooth`), `observe_mutations`, `observe_children`, `on_scroll(event)` (runs once `stuck` is current) and `hold_position()`, which runs instead of following while detached, for containers that keep their own scroll anchor. `selecting` reports whether a text selection is pausing the follow.

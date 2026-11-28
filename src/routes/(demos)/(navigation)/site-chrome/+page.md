@@ -4,7 +4,7 @@ Three small components for the edges of a documentation site: the `Footer` that 
 
 ### `Footer`
 
-The counterpart to [`Nav`](nav): a centered row of icon links followed by `children`, typically a logo and copyright line. `links` takes `FooterLink` objects: `{ href, label, icon?, title?, target?, rel? }`. `icon` accepts an `IconData` value from `svelte-widgets/icons`, such as `GitHub`; `target` and `rel` are native anchor attributes. The `--footer-*` custom properties control padding, background, gap and link color.
+The counterpart to [`Nav`](nav): a centered row of icon links followed by `children`, typically a logo and copyright line. `links` takes `FooterLink` objects: `{ href, label, icon?, title?, target?, rel? }`. `icon` takes an `IconData` value from `svelte-widgets/icons`, such as `GitHub`. `--footer-padding`, `--footer-bg`, `--footer-nav-margin`, `--footer-nav-gap`, `--footer-link-gap` and `--footer-link-color` restyle it.
 
 ```svelte example id="footer-demo"
 <script lang="ts">
@@ -32,13 +32,13 @@ The counterpart to [`Nav`](nav): a centered row of icon links followed by `child
 </Footer>
 ```
 
-Use an `item({ link })` snippet for custom icons or markup. It replaces each default anchor while preserving the nav layout.
+An `item({ link })` snippet replaces each default anchor with custom icons or markup, keeping the nav layout.
 
 ### `LiteYouTubeEmbed`
 
 Renders YouTube's poster image (a `webp` source with a `jpg` fallback) behind the play button and only creates the `youtube-nocookie` iframe on the first click, so a page full of videos costs a page full of images. Setting a new `video_id` tears the player back down to its poster.
 
-`player_params` becomes the player's query string verbatim — `start`, `list`, `autoplay` and anything else YouTube accepts. It defaults to `{ autoplay: 1 }` and replaces that default when set, so pass `autoplay: 1` along with the rest to keep playing on click. `nocookie={false}` opts into the tracking host, and `--lite-youtube-bg` themes the letterbox behind the poster. Nested chrome takes `play_btn_props` and `iframe_props`, including iframe attributes such as `loading`, `referrerpolicy` and `sandbox`; the component keeps ownership of button state plus iframe `src`, `srcdoc` and `title`.
+`player_params` becomes the player's query string verbatim (`start`, `list`, `autoplay` or anything else YouTube accepts). Setting it replaces the default `{ autoplay: 1 }`, so include `autoplay: 1` to keep playing on click. `nocookie={false}` opts into the tracking host, and `--lite-youtube-bg` themes the letterbox behind the poster. Nested chrome takes `play_btn_props` and `iframe_props`, including iframe attributes such as `loading`, `referrerpolicy` and `sandbox`; the component keeps ownership of button state plus iframe `src`, `srcdoc` and `title`.
 
 ```svelte example id="lite-youtube-demo"
 <script lang="ts">

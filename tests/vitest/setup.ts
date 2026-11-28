@@ -34,7 +34,7 @@ const dispatch_toggle = (element: HTMLElement, new_state: `closed` | `open`): bo
 
 beforeAll(() => {
   Element.prototype.animate = vi.fn().mockReturnValue({ cancel: vi.fn() })
-  Element.prototype.getAnimations = vi.fn().mockReturnValue([{}])
+  Element.prototype.getAnimations = vi.fn().mockReturnValue([{ cancel: vi.fn() }])
   // happy-dom has no Popover API. Unit tests only need observable open state and toggle
   // events; real light dismissal and top-layer behavior are covered in Playwright.
   Object.defineProperty(Element.prototype, `matches`, {

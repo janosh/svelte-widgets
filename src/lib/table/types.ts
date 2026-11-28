@@ -20,6 +20,12 @@ export type TableColumn = {
   disabled?: boolean
 }
 
+// What opened or closed a ColumnPicker / ColumnFilter popover. `dismiss` is the native light
+// dismiss (an outside click, Escape, or another popover opening); `programmatic` a change
+// through the bound `open` prop.
+export type ColumnPopoverOpenVia = `trigger` | `programmatic`
+export type ColumnPopoverCloseVia = ColumnPopoverOpenVia | `dismiss`
+
 export type FilterKind = `numeric` | `category` | `text`
 
 // Active filter on one column: a numeric range (either end optional), a category

@@ -2,7 +2,12 @@ import type { Snippet } from 'svelte'
 import type { HTMLDialogAttributes } from 'svelte/elements'
 import { escape_layer } from './attachments/shared'
 
-export type DialogCloseVia = `pointer` | `escape` | `close`
+// What opened or closed a Dialog (or Sheet): `trigger` the trigger snippet's button,
+// `pointer` a backdrop press, `close` the controls' close() or a native close() on the
+// surface, `programmatic` a change to the bound `open`
+export type DialogOpenVia = `trigger` | `programmatic`
+export type DialogCloseVia = `pointer` | `escape` | `close` | `programmatic`
+export type DialogOpenDetail = { via: DialogOpenVia }
 export type DialogCloseDetail = { via: DialogCloseVia }
 export type DialogControls = { close: () => void }
 export type DialogTriggerProps = {
@@ -22,6 +27,7 @@ export type DialogProps = Omit<HTMLDialogAttributes, `children`> & {
   header?: Snippet<[DialogControls]>
   footer?: Snippet<[DialogControls]>
   children: Snippet<[DialogControls]>
+  on_open?: (detail: DialogOpenDetail) => void
   on_close?: (detail: DialogCloseDetail) => void
 }
 

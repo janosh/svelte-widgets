@@ -1,6 +1,6 @@
 ## `float`
 
-Parks an element next to an anchor and keeps it there while the page scrolls or resizes. The geometry — flip to the side that fits, then shift to stay on screen — comes from `compute_position` in `svelte-widgets/utils`, which the tooltip and the portalled dropdown also use. The anchor can be a plain rect instead of an element, which is how `ActionMenu` hangs its context form off the pointer.
+Parks an element next to an anchor and keeps it there while the page scrolls or resizes. The geometry — flip to the side that fits, then shift to stay on screen — comes from `compute_position` in `svelte-widgets/position`, which the tooltip and the portalled dropdown also use. The anchor can be a plain `{ top, left, bottom, right }` rect instead of an element, which is how `ActionMenu`'s context-menu mode hangs off the pointer. `strategy` is `fixed` (default) or `absolute` (survives a transformed ancestor), and `match_width` sizes the element to the anchor's width.
 
 ```svelte example id="attachments-float"
 <script lang="ts">

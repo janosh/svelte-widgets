@@ -1,10 +1,10 @@
 ## FileInput
 
-A native file picker and drop zone sharing type, size and count validation. File parsing and uploading remain caller-owned; the component provides processing, cancellation, rejection messages and retry around your `on_files` callback.
+A native file picker and drop zone with shared type, size and count validation. Parsing and uploading stay caller-owned; the component wraps your `on_files` callback with processing state, cancellation, rejection messages and retry.
 
 ### Minimal example
 
-Choose or drop up to three text files. A new accepted selection replaces the previous files; it does not append to them. Rejected files leave the current selection intact when no incoming files pass validation.
+Choose or drop up to three text files. A new accepted selection replaces the previous files rather than appending. If no incoming file passes validation, the current selection stays.
 
 ```svelte example id="file-input-basic"
 <script lang="ts">
@@ -26,7 +26,7 @@ Choose or drop up to three text files. A new accepted selection replaces the pre
 
 ### Parse JSON with cancellation and retry
 
-Select a valid JSON file to preview it, or a malformed one to exercise the error state. Throwing from `on_files` displays the error with a Retry button. The supplied signal is aborted when accepted files replace the selection, the operation is cancelled, a file is removed, the input becomes disabled or the component unmounts. `File.text()` itself cannot be cancelled, so check the signal before publishing its result.
+Select a valid JSON file to preview it, or a malformed one to see the error state. Throwing from `on_files` shows the error with a Retry button. The signal aborts when accepted files replace the selection, the operation is cancelled, a file is removed, the input becomes disabled or the component unmounts. `File.text()` cannot be cancelled, so check the signal before publishing its result.
 
 ```svelte example id="file-input-json"
 <script lang="ts">
@@ -56,28 +56,28 @@ Select a valid JSON file to preview it, or a malformed one to exercise the error
 {/if}
 ```
 
-For uploads, build a `FormData` and pass the signal to `fetch`; throw when `response.ok` is false. Retry calls `on_files` again with the current accepted files. Cancellation stops the component's processing state, but your callback must respect the signal to prevent stale results.
+For uploads, build a `FormData`, pass the signal to `fetch` and throw when `response.ok` is false. Retry calls `on_files` again with the current files. Cancellation only ends the component's processing state; your callback must respect the signal to avoid stale results.
 
 ### Main API
 
-| Prop                                        | Purpose                                                                                                  |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `bind:files`                                | Current accepted `File[]`, initially empty.                                                              |
-| `accept`                                    | Comma-separated extensions, MIME types or MIME wildcards. Checked for both picker and drops.             |
-| `multiple={false}`, `max_files`, `max_size` | Per-selection count and per-file byte limits. Limits otherwise default to infinity.                      |
-| `on_files(files, signal)`                   | Parse or upload accepted files, synchronously or asynchronously.                                         |
-| `on_reject(rejections)`                     | Called only when files are rejected, with `{ file, reason }` entries (reason `type`, `size` or `count`). |
-| `on_remove(file)`                           | Observe removal from the default file list.                                                              |
-| `children(files)`                           | Replace the default list with a custom preview; provide your own removal controls if needed.             |
-| `label`, `remove_label`, `disabled`         | Picker label, removal button text and disabled state.                                                    |
+| Prop                                        | Purpose                                                                                                    |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `bind:files`                                | Current accepted `File[]`, initially empty.                                                                |
+| `accept`                                    | Comma-separated extensions, MIME types or MIME wildcards. Checked for both picker and drops.               |
+| `multiple={false}`, `max_files`, `max_size` | Per-selection count and per-file byte limits, default unlimited. Without `multiple`, one file is accepted. |
+| `on_files(files, signal)`                   | Parse or upload accepted files, synchronously or asynchronously.                                           |
+| `on_reject(rejections)`                     | Called only when files are rejected, with `{ file, reason }` entries (reason `type`, `size` or `count`).   |
+| `on_remove(file)`                           | Observe removal from the default file list.                                                                |
+| `children(files)`                           | Replace the default list with a custom preview; provide your own removal controls if needed.               |
+| `label`, `remove_label`, `disabled`         | Picker label, removal button text and disabled state.                                                      |
 
 ### Keyboard and feedback
 
-Tab reaches the native file picker and removal, cancel or retry buttons. Activate them with the browser's usual keyboard controls; drag and drop is optional. Validation failures are announced through a status region, and asynchronous errors use TaskStatus. Client-side `accept` checks are for user feedback; validate content and limits again at your upload endpoint.
+Tab reaches the native file picker and the remove, cancel and retry buttons, so drag and drop is optional. Validation failures are announced through a status region, and asynchronous errors use TaskStatus. Client-side `accept` checks are user feedback only; validate content and limits again at your upload endpoint.
 
 ## ExportDestination
 
-The save-side counterpart: a file name field plus, where the File System Access API is usable (not in frames cross-origin to the top page), a choice of destination: browser downloads (the default), a picked folder, or a native Save As dialog for each file. `FileExportState` from `svelte-widgets/browser` holds the destination and validates the name; its `run(task)` passes the task `open(filename, mime, signal?)` and the `destination`, so an export writing several files can refuse Save As (one dialog per click) before asking. `open` checks the name before anything is encoded (a folder refuses names that already exist, best effort since the API has no exclusive create; Save As shows its dialog, which confirms overwrites itself) and resolves to a writer the task calls with the finished data. A dismissed Save As dialog (`open` rejects with `ExportCancelledError`) or the abort of a signal passed to `open` ends the export without an error message, and a picked file the export never wrote is removed again while empty.
+The save-side counterpart: a file name field plus, where the File System Access API is usable (not in frames cross-origin to the top page), a destination choice: browser downloads (default), a picked folder, or a native Save As dialog per file. `FileExportState` from `svelte-widgets/browser` holds the destination and validates the name. Its `run(task)` passes the task `{ filename, destination, open }`, so an export writing several files can refuse Save As (one dialog per click) before asking. `open(filename, mime, signal?)` checks the name before anything is encoded (a folder refuses existing names, best effort since the API has no exclusive create; Save As confirms overwrites in its own dialog) and resolves to a writer the task calls with the finished data. A dismissed Save As dialog (`open` rejects with `ExportCancelledError`) or the abort of a signal passed to `open` ends the export without an error message, and a picked file the export never wrote is removed while still empty.
 
 ```svelte example id="export-destination"
 <script lang="ts">

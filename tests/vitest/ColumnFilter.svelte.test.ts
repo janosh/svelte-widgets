@@ -37,6 +37,10 @@ describe(`ColumnFilter`, () => {
   }
   const trigger = () => doc_query<HTMLButtonElement>(`.column-filter-trigger`)
   const panel = () => document.querySelector<HTMLElement>(`.column-filter-panel`)
+  const dismiss = () =>
+    panel()?.dispatchEvent(
+      Object.assign(new Event(`beforetoggle`), { newState: `closed` }),
+    )
 
   test(`numeric columns get a range whose bounds collapse to no filter when cleared`, async () => {
     const state = mount_filter([3, 1.5, 12.345], { format_bound: String })
@@ -125,12 +129,58 @@ describe(`ColumnFilter`, () => {
     expect(state.open).toBe(true)
     expect(values).toHaveBeenCalledOnce()
     expect(panel()?.getAttribute(`popover`)).toBe(`auto`)
-    panel()?.dispatchEvent(
-      Object.assign(new Event(`beforetoggle`), { newState: `closed` }),
-    )
+    dismiss()
     await tick()
     expect(state.open).toBe(false)
     expect(panel()).toBeNull()
+  })
+
+  // each cause of an open/close change, starting from the opposite state
+  test.each([
+    { initial: false, via: `trigger` },
+    { initial: false, via: `programmatic` },
+    { initial: true, via: `trigger` },
+    { initial: true, via: `programmatic` },
+    { initial: true, via: `dismiss` },
+  ] as const)(
+    `open=$initial reports $via exactly once and nothing on mount`,
+    async ({ initial, via }) => {
+      const [on_open, on_close] = [vi.fn(), vi.fn()]
+      const state = mount_filter([1, 2], { open: initial, on_open, on_close })
+      await tick()
+      expect([on_open.mock.calls, on_close.mock.calls]).toEqual([[], []])
+
+      if (via === `trigger`) await click(trigger())
+      else if (via === `dismiss`) dismiss()
+      else state.open = !initial
+      await tick()
+
+      expect(state.open).toBe(!initial)
+      expect(panel() === null).toBe(initial)
+      const [fired, silent] = initial ? [on_close, on_open] : [on_open, on_close]
+      expect(fired).toHaveBeenCalledExactlyOnceWith({ via })
+      expect(silent).not.toHaveBeenCalled()
+    },
+  )
+
+  test(`an on_open that closes the panel again still reports the close`, async () => {
+    const events: unknown[] = []
+    const state = mount_filter([1, 2], {
+      open: false,
+      on_open: ({ via }: { via: string }) => {
+        events.push([`open`, via])
+        state.open = false
+      },
+      on_close: ({ via }: { via: string }) => events.push([`close`, via]),
+    })
+    await tick()
+    await click(trigger())
+    await tick()
+    expect(events).toEqual([
+      [`open`, `trigger`],
+      [`close`, `programmatic`],
+    ])
+    expect(state.open).toBe(false)
   })
 
   test(`replaces the funnel through the trigger snippet and forwards root attributes`, async () => {

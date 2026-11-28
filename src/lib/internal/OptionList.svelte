@@ -61,21 +61,15 @@
     labels,
     highlight_matches = true,
     input_props = {},
-    input_class,
-    input_style,
     inputmode,
     pattern,
     id,
     outer_div = $bindable(null),
-    outer_div_class,
     style,
-    li_option_class,
+    li_option_props = {},
     li_active_option_class,
-    li_option_style,
-    ul_options_class,
-    ul_options_style,
-    li_group_header_class,
-    li_group_header_style,
+    ul_options_props = {},
+    li_group_header_props = {},
     default_disabled_title = `This option is disabled`,
     no_matching_options_msg = `No matching options`,
     option,
@@ -223,12 +217,7 @@
   }
 </script>
 
-<div
-  {...rest}
-  class={[`option-list`, outer_div_class, class_name]}
-  bind:this={outer_div}
-  {style}
->
+<div {...rest} class={[`option-list`, class_name]} bind:this={outer_div} {style}>
   <input
     bind:this={input}
     bind:value={search_text}
@@ -238,8 +227,6 @@
     {inputmode}
     {pattern}
     {id}
-    class={input_class}
-    style={input_style}
     placeholder={typeof placeholder === `object` ? placeholder?.text : placeholder}
     role="combobox"
     aria-haspopup="listbox"
@@ -261,12 +248,12 @@
     {onclick}
   />
   <ul
-    class={[`options`, ul_options_class]}
+    {...ul_options_props}
+    class={[`options`, ul_options_props.class]}
     id="{base_id}-listbox"
     role="listbox"
     bind:this={list}
     bind:clientHeight={client_height}
-    style={ul_options_style}
     onscroll={(event) => {
       scroll_top = event.currentTarget.scrollTop
       loader.on_scroll(event)
@@ -283,13 +270,13 @@
       {#snippet children(row)}
         {#if row.kind === `header`}
           <li
+            {...li_group_header_props}
             class={[
               `group-header`,
-              li_group_header_class,
+              li_group_header_props.class,
               { sticky: sticky_group_headers },
             ]}
             role="presentation"
-            style={li_group_header_style}
             style:height={row_height}
             style:box-sizing={row_height && `border-box`}
           >
@@ -312,6 +299,7 @@
           <!-- per-key, so an arrow key re-runs only the two rows it moves between -->
           {@const is_active = is_active_idx(row.flat_idx)}
           <li
+            {...li_option_props}
             id="{base_id}-opt-{row.flat_idx}"
             role="option"
             aria-selected="false"
@@ -320,14 +308,13 @@
             aria-posinset={row.flat_idx + 1}
             aria-setsize={visible_options.length}
             class={[
-              li_option_class,
-              { active: is_active, disabled: disabled_option },
+              li_option_props.class,
               is_active && li_active_option_class,
+              { active: is_active, disabled: disabled_option },
             ]}
-            style={li_option_style}
             style:height={row_height}
             style:box-sizing={row_height && `border-box`}
-            title={disabled_option ? default_disabled_title : undefined}
+            title={disabled_option ? default_disabled_title : li_option_props.title}
             onmousemove={() => {
               if (!disabled_option) active_index = row.flat_idx
             }}

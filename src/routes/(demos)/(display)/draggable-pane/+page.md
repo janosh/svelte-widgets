@@ -1,8 +1,8 @@
 ## DraggablePane
 
-A toggle button and the floating panel it opens. Drag it by the grip on its tab, resize it from the gutter along its right and bottom edges, and reset it back under the toggle once you have moved it. It composes three attachments rather than reimplementing them: [`draggable`](attachments/draggable) moves it, [`resizable`](attachments/resizable) sizes it, and [`click_outside`](attachments/click-outside) takes it away.
+A toggle button and the floating panel it opens. Drag it by the grip on its tab, resize it from the gutter along its right and bottom edges, and reset it back under the toggle once you have moved it. It composes three attachments: [`draggable`](attachments/draggable) moves it, [`resizable`](attachments/resizable) sizes it, and [`click_outside`](attachments/click-outside) takes it away.
 
-Use it for anything that hangs off a control in the corner of a widget — export options, plot controls, a settings panel — where a modal would be too heavy and a dropdown too small.
+Use it for export options, plot controls or a settings panel hanging off a widget's corner, where a modal is too heavy and a dropdown too small.
 
 ```svelte example id="draggable-pane-basic"
 <script lang="ts">
@@ -48,13 +48,15 @@ Use it for anything that hangs off a control in the corner of a widget — expor
 </div>
 ```
 
-The `children` snippet receives `{ open, show_controls, has_been_dragged, dragging }`, so content can react to the pane's own chrome — pausing an animation while the pane is being dragged over it, for instance.
+`on_open` and `on_close` report each change once with its cause: `trigger` (the toggle), `close` (the close button), `pointer`, `escape`, or `programmatic` for a change to the bound `open`. Mounting reports nothing.
 
-The pane carries `toc-exclude`, so headings in its content stay out of a page's [`Toc`](toc) — a pane is floating chrome, not page structure.
+The `children` snippet receives `{ open, show_controls, has_been_dragged, dragging }`, so content can react to the pane's chrome, e.g. pause an animation while the pane is dragged.
+
+The pane carries `toc-exclude`, so headings in its content stay out of a page's [`Toc`](toc).
 
 ### Custom toggle content
 
-`open_icon` and `closed_icon` select bundled icons. The `toggle` snippet accepts custom content, such as an SVG, a label, or an external icon set. It replaces the button's _content_; the component still manages the button, anchor geometry, `aria-expanded`, and click handling. The snippet receives the same state as `children`.
+`open_icon` and `closed_icon` select bundled icons. The `toggle` snippet (same state as `children`) replaces the button's _content_ with anything, such as an SVG, a label or an external icon; the component still owns the button, anchor geometry, `aria-expanded` and click handling.
 
 ```svelte example id="draggable-pane-toggle"
 <script lang="ts">
@@ -77,7 +79,7 @@ The pane carries `toc-exclude`, so headings in its content stay out of a page's 
 
 ### Persistent panes
 
-`persistent` drops only the press-outside dismissal. It is bindable, and the pin button on the pane's tab toggles it. Escape still closes the pane, as does the close button that appears on its tab once you move it, so there is always a way out. Escape is layered: a pane opened from inside a dialog closes before the dialog does.
+`persistent` drops only the press-outside dismissal. It is bindable, and the pin button on the pane's tab toggles it. Escape still closes it, as does the close button that appears on its tab once moved. Escape is layered: a pane opened from inside a dialog closes before the dialog does.
 
 ### Positioning
 
@@ -101,6 +103,8 @@ The pane carries `toc-exclude`, so headings in its content stay out of a page's 
 
 ### Styling
 
-Everything hangs off CSS custom properties on the pane: `--pane-bg`, `--pane-color`, `--pane-border`, `--pane-border-radius`, `--pane-box-shadow`, `--pane-width`, `--pane-min-height`, `--pane-max-height`, `--pane-padding`, `--pane-gap`, `--pane-align-content`, `--pane-overflow-x`, `--pane-overflow-y`, `--pane-z-index`, `--pane-control-tab-z-index`, plus `--pane-toggle-*` for the button. `pane_props` and `toggle_props` spread onto the two elements for anything else.
+CSS custom properties on the pane: `--pane-bg`, `--pane-color`, `--pane-border`, `--pane-radius`, `--pane-box-shadow`, `--pane-width`, `--pane-min-height`, `--pane-max-height`, `--pane-padding`, `--pane-gap`, `--pane-align-content`, `--pane-overflow-x`, `--pane-overflow-y`, `--pane-z-index`, `--pane-control-tab-z-index`, plus `--pane-toggle-*` for the button. `pane_props` and `toggle_props` spread onto the two elements for anything else.
 
-The pane also carries `data-resize` and `data-dragging`, so content underneath can react without a prop — `[data-dragging='true'] canvas { pointer-events: none }`, say. Both, plus `role` and `aria-modal`, are applied after the `pane_props` spread so they cannot be clobbered. `aria-label` is applied before it, so a page holding more than one pane names them apart with `pane_props={{ 'aria-label': 'Structure controls' }}`.
+Content gets compact control defaults for headings, rules, labels, buttons and tables at `.draggable-pane :where(...)` specificity (0,1,0): above a host's bare `button {}` rule, below any component or class selector, so restyling them takes one class. Text inputs and selects get theirs at (0,0,0), so any rule sizing fields wins. `--pane-h4-margin` and `--pane-h4-font-size` size section headings; buttons take the host's `--btn-bg` and `--btn-bg-hover`.
+
+The pane also carries `data-resize` and `data-dragging`, so content underneath can react without a prop, e.g. `[data-dragging='true'] canvas { pointer-events: none }`. Both, plus `role` and `aria-modal`, are applied after the `pane_props` spread so they cannot be clobbered. `aria-label` is applied before it, so a page holding more than one pane names them apart with `pane_props={{ 'aria-label': 'Structure controls' }}`.

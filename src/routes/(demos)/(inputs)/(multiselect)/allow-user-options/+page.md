@@ -1,6 +1,6 @@
 ## Allow Custom User Input
 
-`allow_user_options={true}` means users can enter custom options by entering text and hitting enter.
+With `allow_user_options`, users create custom options by typing text and pressing Enter.
 
 ```svelte example id="foods"
 <script lang="ts">
@@ -44,7 +44,7 @@
 
 ## Append User Input
 
-`allow_user_options="append"` is similar to `true` but also adds user-entered custom options to the dropdown list. They'll remain there for re-selection if users remove their custom options from selected items.
+`allow_user_options="append"` also adds custom options to the dropdown, so they stay available for re-selection after being removed.
 
 ```svelte example id="languages"
 <script lang="ts">
@@ -83,7 +83,7 @@
 
 ## Start empty
 
-You can start with no options and let users populate MultiSelect from scratch. In this case, MultiSelect acts more like a tagging component.
+Without `options`, users populate MultiSelect from scratch, like a tagging input.
 
 ```svelte example id="no-default-options"
 <script lang="ts">
@@ -106,7 +106,7 @@ You can start with no options and let users populate MultiSelect from scratch. I
 
 ## Paste Multiple Values
 
-`parse_paste` lets users paste comma or newline-separated text and split it into multiple options at once. Useful for email lists, tags, or any bulk input. Click a snippet below to copy, then paste into the input.
+`parse_paste` splits pasted text (here on commas and newlines) into multiple options at once, e.g. for email lists or tags. `on_create` still vets each one. Copy a snippet below, then paste it into the input.
 
 ```svelte example id="parse-paste"
 <script lang="ts">

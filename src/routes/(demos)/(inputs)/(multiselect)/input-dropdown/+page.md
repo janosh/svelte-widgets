@@ -1,6 +1,6 @@
 ## Editable Input Dropdown
 
-Use `selected_display="input"` with `mode="single"` for a `<datalist>`-like autocomplete field backed by the existing dropdown ([discussion #221](https://github.com/janosh/svelte-widgets/discussions/221)). The visible input is editable: `search_text` mirrors what the user sees and, when the component has a `name`, is what the form submits. `value` only updates once an option is committed (clicked or activated via `Enter`). Editing the text after a commit clears `value` but keeps the draft in `search_text`. Forward extra `<input>` attributes via `input_props` (e.g. `maxlength`, `autocapitalize`, `aria-describedby`). Click the caret after selecting an option or typing custom text to show the full list, then click it again to close the dropdown. Committed options are marked with `aria-selected="true"`.
+`selected_display="input"` with `mode="single"` makes a `<datalist>`-like autocomplete field ([janosh/svelte-widgets#221](https://github.com/janosh/svelte-widgets/discussions/221)). `search_text` mirrors the editable input and, given a `name`, is what the form submits. `value` only updates once an option is committed (clicked or chosen with Enter); editing the text afterwards clears `value` but keeps the draft in `search_text`. Committed options get `aria-selected="true"`. Extra `<input>` attributes (e.g. `maxlength`, `autocapitalize`, `aria-describedby`) go in `input_props`. The caret toggles the full, unfiltered list, even after a selection or with custom text typed.
 
 ```svelte example id="input-dropdown"
 <script lang="ts">
@@ -42,7 +42,7 @@ Use `selected_display="input"` with `mode="single"` for a `<datalist>`-like auto
 
 ## Quiet Datalist Mode
 
-Combine with `allow_user_options`, `create_option_msg={null}` and an empty `no_matching_options_msg` for a "quiet" mode where typed text becomes the value without any dropdown messaging — a near drop-in replacement for a plain `<input>` that still benefits from option suggestions when `options` are provided.
+Adding `allow_user_options`, `create_option_msg={null}` and an empty `no_matching_options_msg` silences all dropdown messages and submits typed text as-is: a near drop-in for a plain `<input>` that still suggests any `options` you pass.
 
 ```svelte example id="quiet-datalist"
 <script lang="ts">

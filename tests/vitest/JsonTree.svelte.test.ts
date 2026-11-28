@@ -487,7 +487,7 @@ describe(`copy and download`, () => {
     await click(copy_btn)
     const copied_text = write_text.mock.calls[0][0]
     expect(JSON.parse(copied_text)).toEqual(value)
-    expect(doc_query(`.copy-feedback`).textContent).toBe(`Copied!`)
+    expect(doc_query(`.copy-toast`).textContent).toBe(`Copied!`)
     expect(on_copy).toHaveBeenCalledWith(`[root]`, copied_text)
   })
 
@@ -498,7 +498,7 @@ describe(`copy and download`, () => {
     await vi.waitFor(() => expect(write_text).toHaveBeenCalled())
     flushSync()
     await tick()
-    expect(doc_query(`.copy-feedback.error`).textContent).toBe(`Copy failed`)
+    expect(doc_query(`.copy-toast[data-error]`).textContent).toBe(`Copy failed`)
   })
 
   it.each([
@@ -535,30 +535,19 @@ describe(`copy and download`, () => {
     if (!override) expect(revoke_url).toHaveBeenCalledWith(`blob:download`)
   })
 
-  // beside the copied value, centered on its row, not at the pointer; before it when the
-  // viewport's right edge leaves no room
-  it.each([
-    [`beside`, new DOMRect(30, 50, 70, 20), [`106px`, `60px`, `0 -50%`]],
-    [`before`, new DOMRect(950, 50, 60, 20), [`944px`, `60px`, `-100% -50%`]],
-  ])(
-    `clicking a value copies it with feedback %s it and fires on_copy`,
-    async (_side, rect, expected) => {
-      vi.stubGlobal(`innerWidth`, 1024)
-      const write_text = mock_clipboard_write()
-      const on_copy = vi.fn()
-      mount_expanded({ value: { name: `test` }, on_copy })
-      const value_el = doc_query(`.json-value`)
-      value_el.getBoundingClientRect = () => rect
-      fire(value_el, mouse(`click`, { clientX: 40, clientY: 55 }))
-      await vi.waitFor(() => expect(on_copy).toHaveBeenCalledWith(`name`, `test`))
-      flushSync()
-      expect(write_text).toHaveBeenCalledWith(`test`)
-      const feedback = doc_query(`.copy-feedback`)
-      expect(feedback.textContent?.trim()).toBe(`Copied!`)
-      const { left, top, translate } = feedback.style
-      expect([left, top, translate]).toEqual(expected)
-    },
-  )
+  // beside the copied value, centered on its row, not at the pointer
+  it(`clicking a value copies it with feedback beside it and fires on_copy`, async () => {
+    const write_text = mock_clipboard_write()
+    const on_copy = vi.fn()
+    mount_expanded({ value: { name: `test` }, on_copy })
+    const value_el = doc_query(`.json-value`)
+    value_el.getBoundingClientRect = () => new DOMRect(30, 50, 70, 20)
+    fire(value_el, mouse(`click`, { clientX: 40, clientY: 55 }))
+    await vi.waitFor(() => expect(on_copy).toHaveBeenCalledWith(`name`, `test`))
+    expect(write_text).toHaveBeenCalledWith(`test`)
+    const { textContent, style } = doc_query(`.copy-toast`)
+    expect([textContent, style.left, style.top]).toEqual([`Copied!`, `106px`, `60px`])
+  })
 
   // every copy trigger shows its feedback beside the element it copied, never in a corner
   const name_row = () => node_at(`name`)?.querySelector(`:scope > .node-content`) ?? null
@@ -608,11 +597,9 @@ describe(`copy and download`, () => {
     if (!anchor) throw new Error(`no anchor element`)
     anchor.getBoundingClientRect = () => new DOMRect(30, 50, 70, 20)
     await act()
-    await vi.waitFor(() =>
-      expect(document.querySelector(`.copy-feedback`)).not.toBeNull(),
-    )
-    const { left, top, translate } = doc_query(`.copy-feedback`).style
-    expect([left, top, translate]).toEqual([`106px`, `60px`, `0 -50%`])
+    await vi.waitFor(() => expect(document.querySelector(`.copy-toast`)).not.toBeNull())
+    const { left, top } = doc_query(`.copy-toast`).style
+    expect([left, top]).toEqual([`106px`, `60px`])
   })
 
   it(`Shift+click and middle-click on a key or node row copy only that path`, async () => {
@@ -1154,16 +1141,12 @@ describe(`inline editing`, () => {
 })
 
 describe(`unmount`, () => {
-  test(`pending search debounce and copy feedback timers are cleared`, async () => {
+  test(`pending search debounce timer is cleared`, async () => {
     vi.useFakeTimers()
-    mock_clipboard_write()
     const unmount_tree = mount_tree({ value: { a: 1 } })
     await fire_input(doc_query<HTMLInputElement>(`.search-input`), `a`, `input`)
-    control_group(2)[0].click()
-    await vi.advanceTimersByTimeAsync(0) // let the clipboard promise resolve and arm the timer
-    flushSync()
-    expect(doc_query(`.copy-feedback`).textContent).toBe(`Copied!`)
-    expect(vi.getTimerCount()).toBe(2)
+    await vi.advanceTimersByTimeAsync(0) // flush mount-time zero-delay work
+    expect(vi.getTimerCount()).toBe(1)
     await unmount_tree()
     expect(vi.getTimerCount()).toBe(0)
   })

@@ -10,9 +10,9 @@
 <Heading level={2} id="virtual-list">Virtual List</Heading>
 
 <MultiSelect
-  outer_div_class="virtual"
+  class="virtual"
   options={virtual_options}
   virtual_list
   open
-  ul_options_style="max-height: 300px"
+  ul_options_props={{ style: `max-height: 300px` }}
 />

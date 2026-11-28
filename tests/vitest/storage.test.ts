@@ -3,7 +3,6 @@ import {
   persisted_choice,
   storage_get,
   storage_get_json,
-  storage_get_size,
   storage_remove,
   storage_set,
   storage_set_json,
@@ -62,17 +61,6 @@ describe(`storage_get/set/remove`, () => {
     expect(() => storage_set_json(case_name, value)).not.toThrow()
     expect(storage_get(case_name)).toBeNull()
   })
-})
-
-test.each([
-  [`a valid size`, JSON.stringify({ w: 320, h: 240 }), { w: 320, h: 240 }],
-  [`a non-finite extent`, JSON.stringify({ w: null, h: 240 }), null],
-  [`a missing extent`, JSON.stringify({ w: 320 }), null],
-  [`a non-object payload`, `42`, null],
-  [`nothing stored`, null, null],
-])(`storage_get_size reads back %s`, (_case, stored, expected) => {
-  if (stored !== null) localStorage.setItem(`test.size`, stored)
-  expect(storage_get_size(`test.size`)).toEqual(expected)
 })
 
 describe(`create_recent_list`, () => {

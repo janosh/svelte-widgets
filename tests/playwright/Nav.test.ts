@@ -185,6 +185,7 @@ for (const [stored_theme, color_scheme] of [
           resolve({
             body_present: Boolean(document.body),
             theme,
+            mode: document.documentElement.dataset.themeMode,
           })
         })
         observer.observe(document, { attributes: true, childList: true, subtree: true })
@@ -194,14 +195,63 @@ for (const [stored_theme, color_scheme] of [
     await goto(page, `/`)
     const snapshot = await page.evaluate(() => {
       const browser_global = globalThis as typeof globalThis & {
-        __theme_prepaint_snapshot: Promise<{ body_present: boolean; theme: string }>
+        __theme_prepaint_snapshot: Promise<{
+          body_present: boolean
+          theme: string
+          mode: string
+        }>
       }
       return browser_global.__theme_prepaint_snapshot
     })
     expect(snapshot).toEqual({
       body_present: false,
       theme: `dark`,
+      mode: stored_theme,
     })
+  })
+}
+
+// With every script file blocked the page never hydrates, but inline <head> scripts still run:
+// the server render alone must already show the stored mode's icon (and only it), place the
+// nav where hydration leaves it, hide the Toc panel below its breakpoint, and otherwise
+// highlight the first Toc item
+// oxlint-disable-next-line vitest/prefer-each -- Playwright test has no each API
+for (const [stored_mode, width] of [
+  [`light`, 1300],
+  [`dark`, 390],
+  [null, 1300],
+] as const) {
+  test(`server render with theme ${stored_mode} at ${width}px matches hydration`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 })
+    await page.addInitScript((mode) => {
+      if (mode) localStorage.setItem(`theme`, mode)
+    }, stored_mode)
+    const nav_box = () => page.locator(`.site-header > nav`).boundingBox()
+    await goto(page, `/json-tree`, { waitUntil: `networkidle` })
+    const hydrated_nav = await nav_box()
+
+    await page.route(/\.(?:js|ts|svelte)(?:\?.*)?$/u, (route) => route.abort())
+    await page.goto(`/json-tree`)
+    expect(await nav_box()).toEqual(hydrated_nav)
+    const icons = page.locator(`.site-header nav button[aria-label] svg[data-mode]`)
+    await expect(icons).toHaveCount(3)
+    expect(
+      await icons.evaluateAll((svgs) =>
+        svgs
+          .filter((svg) => getComputedStyle(svg).display !== `none`)
+          .map((svg) => svg.dataset.mode),
+      ),
+    ).toEqual([stored_mode ?? `system`])
+    const toc_nav = page.locator(`aside.toc > nav`)
+    if (width < 1100) await expect(toc_nav).toBeHidden()
+    else {
+      const [first, second] = await toc_nav
+        .locator(`li`)
+        .evaluateAll((items) => items.slice(0, 2).map((li) => getComputedStyle(li).color))
+      expect(first).not.toBe(second)
+    }
   })
 }
 
@@ -268,8 +318,15 @@ test.describe(`Nav dropdown`, () => {
       expect(box.x).toBeCloseTo(boxes[idx < n_rows ? 0 : n_rows].x, 0)
       if (idx % n_rows > 0) expect(box.top).toBeGreaterThan(boxes[idx - 1].top)
     }
-    expect(boxes[n_rows].x).toBeGreaterThan(boxes[0].right)
-    expect(boxes[n_rows].x - boxes[0].right).toBeLessThanOrEqual(4)
+    // a hairline rule sits between the columns, a column gap on either side of it
+    const rule = await menu.locator(`.column-rule`).evaluate((el) => {
+      const { x, right, height } = el.getBoundingClientRect()
+      return { x, right, height }
+    })
+    expect(boxes[0].right).toBeLessThanOrEqual(rule.x)
+    expect(rule.right).toBeLessThanOrEqual(boxes[n_rows].x)
+    expect(rule.height).toBeGreaterThan(0)
+    expect(boxes[n_rows].x - boxes[0].right).toBeLessThanOrEqual(10)
     expect(boxes[n_rows].width).not.toBe(boxes[0].width)
     expect(boxes[n_rows].top).toBeCloseTo(boxes[0].top, 0)
     // Keyboard order follows the first column to the top of the second.
@@ -641,6 +698,26 @@ test(`the mobile menu clears the burger and mirrors its inset`, async ({ page })
   ).toBeCloseTo(burger_box.x, 0)
 })
 
+// Every page, linked from the site nav or not, renders exactly one <main> landmark: the
+// docs styles and heading selectors scope to it, and a second or missing one breaks both
+test(`every page renders exactly one main landmark`, async ({ request }) => {
+  const home = await (await request.get(`/`)).text()
+  const linked = [...home.matchAll(/<a[^>]+href="(?<href>\/[^"#?]*)"/gu)].map(
+    ({ groups }) => groups?.href ?? ``,
+  )
+  const routes = [...new Set([...linked, `/markdown`, `/changelog`, `/contributing`])]
+  expect(routes.length).toBeGreaterThan(40)
+  // markup only: inlined styles and scripts may mention the tag
+  const count_mains = async (route: string) =>
+    (await (await request.get(route)).text())
+      .replaceAll(/<(?<tag>style|script)[\s\S]*?<\/\k<tag>>/gu, ``)
+      .match(/<main[\s>]/gu)?.length ?? 0
+  const counts = await Promise.all(
+    [...routes, `/no-such-page`].map(async (route) => [route, await count_mains(route)]),
+  )
+  expect(counts.filter(([, count]) => count !== 1)).toEqual([])
+})
+
 test(`demo section navigation and titles render before hydration`, async ({
   request,
 }) => {
@@ -701,9 +778,8 @@ for (const width of [390, 1440]) {
     await header.getByRole(`link`, { name: `FileInput`, exact: true }).click()
     await expect(page).toHaveURL(/\/file-input$/u)
     await expect(page.getByLabel(`MultiSelect guide`)).toHaveCount(0)
-    await expect(
-      page.getByRole(`navigation`, { name: `Demo section` }).getByRole(`link`),
-    ).toHaveText(`Inputs`)
+    // other demos carry no section link above their title
+    await expect(page.getByRole(`navigation`, { name: `Demo section` })).toHaveCount(0)
   })
 }
 

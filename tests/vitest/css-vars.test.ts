@@ -193,7 +193,7 @@ test.each<[string, string, Record<string, unknown>]>([
   [`tooltip`, `--tooltip-bg`, { note: ``, fallbacks: [expect.any(String)] }],
   [`code-editor`, `--tok-constant`, { note: `derived from --tok-number` }],
   // only root-rule declarations count: no forced-colors, dark-theme or variant values
-  [`Nav`, `--nav-border-radius`, { declared: [`3pt`] }],
+  [`Nav`, `--nav-radius`, { declared: [`3pt`] }],
   [`RangeSlider`, `--range-slider-thumb`, { declared: [] }],
   [`code-editor`, `--tok-number`, { declared: [expect.any(String)] }],
   [`code-editor`, `--icon-btn-size`, { declared: [] }],
@@ -226,6 +226,19 @@ test(`theming page load covers the real library`, () => {
   for (const { name, vars, shared: group_shared } of groups)
     expect(vars.length + group_shared.length, name).toBeGreaterThan(0)
   expect(public_names.filter((name) => shared_names.has(name))).toEqual([])
+  // naming convention: `--*-radius` and `--*-bg`, never `--*-border-radius`/`--*-background`,
+  // and the shared tokens' current names (`--accent-color`, `--text-color`, ...)
+  const all_names = [
+    ...shared_names,
+    ...groups.flatMap(({ vars }) => vars.map(({ name }) => name)),
+  ]
+  expect(
+    all_names.filter(
+      (name) =>
+        /^--.+-(?:border-radius|background)$/.test(name) ||
+        [`--accent`, `--accent-hover`, `--text`, `--text-muted`].includes(name),
+    ),
+  ).toEqual([])
 })
 
 // A family list of only `monospace` makes browsers size text off 13px instead of the parent's

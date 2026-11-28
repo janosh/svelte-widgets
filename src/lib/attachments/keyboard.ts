@@ -9,7 +9,7 @@ export interface HotkeyOptions {
   // listen on the document, for shortcuts that work anywhere; node-scoped by default so a
   // shortcut dies with the surface that owns it
   global?: boolean
-  enabled?: boolean
+  disabled?: boolean
 }
 
 // Declarative keybindings. Matching lives in run_hotkeys so components with their own
@@ -17,8 +17,8 @@ export interface HotkeyOptions {
 export const hotkey =
   (options: HotkeyOptions) =>
   (node: Element): (() => void) | undefined => {
-    const { bindings, global = false, enabled = true } = options
-    if (!enabled || bindings.length === 0) return undefined
+    const { bindings, global = false, disabled = false } = options
+    if (disabled || bindings.length === 0) return undefined
 
     const target = global ? node.ownerDocument : node
     const on_keydown = (event: Event) => {
@@ -33,7 +33,7 @@ export interface ForwardWindowKeydownOptions {
   // return `true` for a key you took and the browser default (scroll, quick find) is
   // suppressed here rather than at every call site
   handle: (event: KeyboardEvent) => boolean
-  enabled?: boolean
+  disabled?: boolean
 }
 
 // Hands a component the page's keydowns while the pointer is over it and focus is on the
@@ -43,8 +43,8 @@ export interface ForwardWindowKeydownOptions {
 export const forward_window_keydown =
   (options: ForwardWindowKeydownOptions) =>
   (node: Element): (() => void) | undefined => {
-    const { handle, enabled = true } = options
-    if (!enabled) return undefined
+    const { handle, disabled = false } = options
+    if (disabled) return undefined
 
     // Hydration can attach after the pointer has already entered the server-rendered node.
     let is_hovered = node.matches(`:hover`)

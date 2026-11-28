@@ -8,15 +8,15 @@
 
 One recycled tooltip node serves the whole document, rendered in the browser's top layer through the Popover API by default; `fixed` and `absolute` remain explicit positioning strategies. The defaults follow intent rather than raw events: keyboard focus opens immediately, pointer hover waits 100 ms, the pointer may travel onto the tooltip without closing it, Escape dismisses, touch-generated hover is ignored, and moving to a nearby trigger within 300 ms skips the opening delay.
 
-- Content: `content` or a per-trigger `content(trigger)`. Without explicit content, `title`, `aria-label`, then `data-title` are read, `aria-label` only for icon-only triggers (a trigger showing its own text, or a checkbox/radio beside its label, keeps it as its accessible name). Attaching once to a container delegates to matching descendants; `delegate` takes a selector. Text that only repeats the trigger's own visible text is skipped, unless the trigger or a descendant overflows (e.g. an ellipsis), where the tooltip reveals the hidden part.
-- Position: `placement` defaults to `auto`. `align`, `fallback_placements`, `offset`, `cross_axis_offset`, `viewport_padding`, `boundary`, `flip` and `shift` refine it, and the tooltip tracks scrolling, resizing and content changes.
-- Interaction: `trigger`, `touch_focus`, `open_delay_ms`, `close_delay_ms` and `skip_delay_ms`; `on_open_change(open, { trigger, via })` reports visibility changes caused by hover, focus, Escape, or teardown. `disabled` keeps the tooltip shut (closing it if open) while still holding the trigger's `title`, so no native tooltip shows in its place.
+- Content: `content` or a per-trigger `content(trigger)`. Without explicit content, `title`, `aria-label`, then `data-title` are read, `aria-label` only for icon-only triggers (a trigger showing its own text, or a checkbox/radio beside its label, keeps it as its accessible name). A container without content of its own delegates to matching descendants; `delegate` narrows that to a selector or forces it on or off with a boolean. Text that only repeats the trigger's own visible text is skipped, unless the trigger or a descendant overflows (e.g. an ellipsis), where the tooltip reveals the hidden part.
+- Position: `placement` defaults to `auto`. `align`, `offset`, `cross_axis_offset`, `viewport_padding`, `boundary`, `flip` and `shift` refine it, and the tooltip tracks scrolling, resizing and content changes.
+- Interaction: `trigger`, `touch_focus`, `open_delay_ms`, `close_delay_ms` and `skip_delay_ms`; `on_open({ trigger, via })` reports opens by `pointer` or `focus`, and `on_close({ trigger, via })` closes by `pointer`, `blur`, `escape` or `visibility` (teardown or a hidden trigger). `disabled` keeps the tooltip shut (closing it if open) while still holding the trigger's `title`, so no native tooltip shows in its place.
 - Rendering: content is plain text, `wrap` is `balance`, `normal` or `nowrap`, and `show_arrow` defaults to true.
 - Styling: `style` for one-off declarations, or theme with `--tooltip-bg`, `--text-color`, `--tooltip-border`, `--tooltip-padding`, `--tooltip-radius`, `--tooltip-font-size`, `--tooltip-font-family`, `--tooltip-shadow`, `--tooltip-max-width`, `--tooltip-max-height`, `--tooltip-opacity`, `--tooltip-arrow-size`, `--tooltip-transition` and `--tooltip-z-index`.
 
 ### Placement
 
-`auto` opens above or below the trigger, whichever has more room, so a trigger near the bottom of the window puts its tooltip above without being told to. It goes beside the trigger only when neither fits, so tooltips in a row of chips don't cover their neighbors. Naming a side pins it, though the tooltip still slides along the viewport edge rather than overflowing — and the arrow keeps pointing at the trigger after that slide. `align` moves it along the trigger's cross axis, `offset` sets the gap, and `fallback_placements` restricts which sides `auto` may pick from.
+`auto` opens above or below the trigger, whichever has more room, so a trigger near the bottom of the window puts its tooltip above without being told to. It goes beside the trigger only when neither fits, so tooltips in a row of chips don't cover their neighbors. Naming a side pins it, though the tooltip still slides along the viewport edge rather than overflowing — and the arrow keeps pointing at the trigger after that slide. `align` moves it along the trigger's cross axis, `offset` sets the gap, and a `flip` list restricts which sides `auto` may pick from, or which a named side falls back to.
 
 ```svelte example id="attachments-tooltip-placement"
 <script lang="ts">
@@ -127,11 +127,11 @@ Attach `tooltip()` once to a container and every descendant carrying `title`, `d
 
 ### Content and interaction
 
-Tooltip content is plain text. The surface stays open while hovered so its text can be selected. Use <a href={popover_url}>Popover</a> for formatted content, controls, or application-controlled open state.
+The surface stays open while hovered so its text can be selected. Use <a href={popover_url}>Popover</a> for formatted content, controls, or application-controlled open state.
 
-`trigger` picks `hover-focus` (the default), `hover`, or `focus`. `open_delay_ms` applies to pointer hover only; focus opens immediately. `skip_delay_ms` skips that delay when moving between neighbouring triggers. `on_open_change` reports visibility changes and their cause.
+`trigger` picks `hover-focus` (the default), `hover`, or `focus`. `open_delay_ms` (default 100) applies to pointer hover only, `skip_delay_ms` (default 300) is how soon after a close a neighbouring trigger opens without it, and `close_delay_ms` defaults to 100.
 
-With `hover-focus`, touch-induced focus is ignored unless `touch_focus: true` is set. This allows a focusable trigger to show help after a tap while retaining desktop hover behavior. `focus` always accepts touch-induced focus; `hover` never does. Touch-generated hover remains ignored in every mode.
+With `hover-focus`, touch-induced focus is ignored unless `touch_focus: true` is set, which lets a tap on a focusable trigger show its help without changing desktop hover. `focus` always accepts touch-induced focus; `hover` never does. Touch-generated hover remains ignored in every mode.
 
 ```svelte example id="attachments-tooltip-interaction"
 <script lang="ts">
@@ -171,9 +171,8 @@ With `hover-focus`, touch-induced focus is ignored unless `touch_focus: true` is
   <button
     {@attach tooltip({
       content: `Reports focus, pointer, and Escape changes`,
-      on_open_change: (_open, detail) => {
-        last_via = detail.via
-      },
+      on_open: ({ via }) => (last_via = `open: ${via}`),
+      on_close: ({ via }) => (last_via = `close: ${via}`),
     })}
   >
     Visibility events
@@ -273,7 +272,7 @@ Width resolves to `min(--tooltip-max-width, viewport − padding)`, so a tooltip
 
 ### Reactive content
 
-A `MutationObserver` watches the trigger, so a tooltip already on screen re-renders and repositions when its `title`, `aria-label` or `data-title` changes — and when the trigger's own styling changes, the surface picks up the new theme with it.
+A `MutationObserver` watches the trigger, so an open tooltip re-renders and repositions when its `title`, `aria-label` or `data-title` changes, and picks up a new theme when the trigger's `class` or `style` changes.
 
 ```svelte example id="attachments-tooltip-reactive"
 <script lang="ts">

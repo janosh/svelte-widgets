@@ -499,7 +499,7 @@ describe(`compute_position`, () => {
       compute_position(
         anchor,
         { width: 100, height: 100 },
-        { placement: `left`, fallback_placements: [`right`, `top`], shift: false },
+        { placement: `left`, flip: [`right`, `top`], shift: false },
       ).placement,
     ).toBe(expected)
   })
@@ -535,10 +535,6 @@ describe(`compute_position`, () => {
       { placement: `bottom`, offset: 8 },
       { top: 138, left: 100, placement: `bottom` }],
     // same anchor the `most room above` row flips to `top`
-    [`flip: false pins auto even with no room and explicit fallbacks`,
-      [400, 400], rect(370, 20, 190, 20), { width: 40, height: 40 },
-      { placement: `auto`, flip: false, fallback_placements: [`top`, `left`] },
-      { placement: `bottom` }],
     [`auto prefers a fitting side over greater unusable clearance`,
       [400, 400], rect(180, 20, 50, 20), { width: 350, height: 100 },
       { placement: `auto`, shift: false },
@@ -546,7 +542,7 @@ describe(`compute_position`, () => {
     [`explicit fallback order wins equal overflow inside a custom boundary`,
       [1000, 800], rect(290, 20, 290, 20), { width: 300, height: 300 },
       { placement: `auto`, boundary, padding: 10, shift: false,
-        fallback_placements: [`right`, `top`, `left`] },
+        flip: [`right`, `top`, `left`] },
       { placement: `right` }],
     [`offset and boundary padding count toward fallback overflow`,
       [1000, 800], rect(110, 20, 90, 20), { width: 50, height: 50 },
