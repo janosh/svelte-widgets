@@ -422,7 +422,7 @@
 <style>
   nav {
     position: relative;
-    margin: -0.75em auto 1.25em;
+    margin: var(--nav-margin, -0.75em auto 1.25em);
     --nav-radius: 3pt;
     --nav-surface-bg: light-dark(#fafafa, #222226);
     --nav-surface-border: light-dark(rgba(128, 128, 128, 0.25), rgba(200, 200, 200, 0.2));

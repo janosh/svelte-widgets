@@ -45,7 +45,7 @@ A checkbox styled as a switch. `checked` is bindable and the children snippet re
 
 ### `ThemeToggle`
 
-Cycles light → system → dark → light, writes the choice to `localStorage.theme`, and sets `colorScheme` plus `data-theme` on `<html>`. The button stays hidden until mounted so SSR cannot flash a stale icon, and mounted toggles synchronize changes across tabs. Headless consumers can call `init_theme()` to initialize the theme and follow both system preference and cross-tab changes, then call its returned cleanup function on teardown; flash-free first paint still requires equivalent [synchronous logic in the HTML shell](https://github.com/janosh/svelte-widgets/blob/main/src/app.html#L16) because hydration is too late.
+Cycles light → system → dark → light, writes the choice to `localStorage.theme`, and sets `colorScheme` plus `data-theme` on `<html>`. Before hydration it renders all three icons and shows the one matching the `data-theme-mode` that `ThemeScript` sets on `<html>`, so the stored mode's icon appears on first paint without a layout shift (without `ThemeScript` the button stays empty until mount). Mounted toggles synchronize changes across tabs. Headless consumers can call `init_theme()` to initialize the theme and follow both system preference and cross-tab changes, then call its returned cleanup function on teardown; flash-free first paint still requires `<ThemeScript />` in the root layout (or `theme_init_script` injected into the HTML shell) because hydration is too late.
 
 ```svelte example id="theme-toggle-demo"
 <script lang="ts">

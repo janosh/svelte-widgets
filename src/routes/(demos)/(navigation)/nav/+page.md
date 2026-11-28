@@ -130,6 +130,7 @@ Use `bind:open` to control the mobile menu. `children({ open, panel_id, routes }
 
 ```css
 nav {
+  --nav-margin: 0 auto; /* default -0.75em auto 1.25em */
   --nav-radius: 6pt;
   --nav-link-bg-hover: rgba(255, 255, 255, 0.1);
   --nav-link-active-color: mediumseagreen;

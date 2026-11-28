@@ -240,6 +240,20 @@
   $effect(() => {
     desktop = window_width > breakpoint
   })
+  // The server can't know the window width, so it renders the desktop panel. Until hydration a
+  // media query hides it below the breakpoint, and the first mobile switch skips the blur:
+  // otherwise narrow windows see the panel flash and fade out on load.
+  const toc_id = $props.id()
+  const style_tag = `style` // a literal tag in the template would end this component's styles
+  let hydrated = $state(false)
+  let animate_nav = false // plain: read when a transition starts, not tracked
+  $effect(() => {
+    hydrated = true
+    const frame = requestAnimationFrame(() => (animate_nav = true))
+    return () => cancelAnimationFrame(frame)
+  })
+  const nav_blur = (node: Element) =>
+    blur(node, animate_nav && blur_params !== null ? blur_params : { duration: 0 })
   $effect(() => {
     void headings // heading changes can move the aside; check_toc_overlap reads the rest
     check_toc_overlap()
@@ -724,6 +738,7 @@
   class:hidden={hide}
   class:intersecting={is_overlapping_hide_target}
   class:mobile={!desktop}
+  data-toc-pending={hydrated ? undefined : toc_id}
   bind:this={aside}
   hidden={hide}
   aria-hidden={hide || is_overlapping_hide_target}
@@ -733,6 +748,9 @@
     node.toggleAttribute(`inert`, is_overlapping_hide_target)
   }}
 >
+  {#if !hydrated}
+    {@html `<${style_tag}>@media (max-width: ${Number(breakpoint)}px) { [data-toc-pending="${toc_id}"] > nav { display: none } }</${style_tag}>`}
+  {/if}
   <!-- the toggle stays mounted and becomes the close button: unmounting it left touch users
   no visible way out, only an outside click, Escape or a tab-out -->
   {#if !desktop && (heading_data.length >= min_items || footer)}
@@ -772,11 +790,7 @@
     </button>
   {/if}
   {#if open || (desktop && (heading_data.length >= min_items || footer))}
-    <nav
-      {...nav_props}
-      transition:blur={blur_params === null ? { duration: 0 } : blur_params}
-      bind:this={nav}
-    >
+    <nav {...nav_props} transition:nav_blur bind:this={nav}>
       {#if title_snippet}
         {@render title_snippet()}
       {:else if title}
@@ -800,6 +814,7 @@
           <li
             {...li_props}
             class:active={is_active}
+            class:guessed={!hydrated && idx === 0}
             class:collapsed
             aria-hidden={collapsed || undefined}
             aria-current={toc_item && is_active ? `location` : undefined}
@@ -924,6 +939,20 @@
     margin-block: 0;
   }
   aside.toc > nav > ol > li.active {
+    background: var(--toc-active-bg);
+    color: var(--toc-active-color);
+    font: var(--toc-active-li-font);
+    text-shadow: var(--toc-active-text-shadow);
+    border: var(--toc-active-border);
+    border-width: var(--toc-active-border-width);
+    border-radius: var(--toc-active-radius, var(--toc-li-radius, 3pt));
+  }
+  /* Picking the active heading needs the client, so the server-rendered list highlights its
+     first item (`.guessed`, until hydration): right whenever the page opens at its top. A URL
+     targeting an element scrolls past it, so then nothing is guessed; a reload restoring a
+     scroll position still shows the guess until hydration. Its own rule: in a selector list,
+     a browser without :has() would also drop `.active`. */
+  :global(:root:not(:has(:target))) aside.toc > nav > ol > li.guessed {
     background: var(--toc-active-bg);
     color: var(--toc-active-color);
     font: var(--toc-active-li-font);

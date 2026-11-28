@@ -21,14 +21,19 @@ export const system_scheme = (): ColorScheme =>
 // anything else (system, unset, unreadable storage) follows prefers-color-scheme. Render it via
 // ThemeScript, or inject it yourself (e.g. a transformPageChunk hook or a static app.html).
 export const theme_init_script = `{
-  let theme
+  let mode
   try {
-    theme = localStorage.getItem('theme')
+    mode = localStorage.getItem('theme')
   } catch {}
-  if (theme !== 'light' && theme !== 'dark')
-    theme = globalThis.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light'
-  document.documentElement.style.colorScheme = theme
-  document.documentElement.dataset.theme = theme
+  if (mode !== 'light' && mode !== 'dark') mode = 'system'
+  const theme =
+    mode === 'system'
+      ? globalThis.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light'
+      : mode
+  const root = document.documentElement
+  root.style.colorScheme = theme
+  root.dataset.theme = theme
+  root.dataset.themeMode = mode
 }`
 
 // === Reading the scheme an element renders in ===

@@ -2,7 +2,7 @@ import Toc from '#lib/Toc.svelte'
 import Heading from '#lib/Heading.svelte'
 import type { CollapseMode, TocCloseVia, TocHeadingData, TocOpenVia } from '#lib/types.ts'
 import type { ComponentProps } from 'svelte'
-import { createRawSnippet, tick } from 'svelte'
+import { createRawSnippet, mount, tick, unmount as unmount_component } from 'svelte'
 import {
   afterEach,
   beforeEach,
@@ -177,6 +177,51 @@ describe(`Toc`, () => {
     },
   )
 
+  // the server renders the desktop panel, so until hydration a media query at the breakpoint
+  // hides it on narrow windows instead of letting it flash and fade out
+  test(`hides the server-rendered panel below the breakpoint and guesses the first item until hydration`, async () => {
+    set_headings(6)
+    // mounted without render()'s flush: this checks the markup before effects run
+    const toc = mount(Toc, {
+      target: document.body,
+      // items known up front, as a server render gets them
+      props: {
+        breakpoint: 800,
+        items: Array.from({ length: 6 }, (_, idx) => ({
+          id: `heading-${idx + 1}`,
+          level: 2,
+          title: `Heading ${idx + 1}`,
+        })),
+      },
+    })
+    onTestFinished(() => unmount_component(toc))
+    const aside = doc_query(`aside.toc`)
+    const pending = aside.getAttribute(`data-toc-pending`)
+    expect(pending).toMatch(/\S/u)
+    // the server's list highlights its first item until the client picks the active one
+    const guessed = () =>
+      [...aside.querySelectorAll(`li`)].map((li) => li.classList.contains(`guessed`))
+    expect(guessed()).toEqual([true, false, false, false, false, false])
+    expect(aside.querySelector(`style`)?.textContent).toBe(
+      `@media (max-width: 800px) { [data-toc-pending="${pending}"] > nav { display: none } }`,
+    )
+    await tick()
+    expect([
+      aside.hasAttribute(`data-toc-pending`),
+      aside.querySelector(`style`),
+    ]).toEqual([false, null])
+    expect(guessed()).toEqual(Array(6).fill(false))
+    expect(aside.querySelectorAll(`li.active`)).toHaveLength(1)
+  })
+
+  // mounting below the breakpoint drops the server's desktop panel at once: a blur-out there
+  // is the very flash the pre-hydration style exists to avoid
+  test(`the first switch to mobile on mount skips the panel's blur`, async () => {
+    set_headings(6)
+    await mount_toc({ breakpoint: innerWidth + 1 })
+    // an outro would keep the nav mounted until its blur ends
+    expect(document.querySelector(`aside.toc > nav`)).toBeNull()
+  })
   test(`renders the title as an excluded h2`, async () => {
     await mount_toc({ title: `Custom title` })
     expect(doc_query(`h2.toc-title.toc-exclude`).textContent).toBe(`Custom title`)

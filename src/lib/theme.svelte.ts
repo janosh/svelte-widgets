@@ -34,6 +34,8 @@ export const apply_theme_mode = (mode: ThemeMode): void => {
   const effective = mode === `system` ? system_scheme() : mode
   document.documentElement.style.colorScheme = effective
   document.documentElement.dataset.theme = effective
+  // lets ThemeToggle's server-rendered markup show the right icon before hydration
+  document.documentElement.dataset.themeMode = mode
   theme_mode = mode
   theme_resolved = effective
   storage_set(`theme`, mode)
