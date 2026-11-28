@@ -23,7 +23,8 @@ html {
   color-scheme: dark light;
 }
 body {
-  --page-pad: clamp(1rem, 7vw, 6rem);
+  /* phones keep 1rem; wider windows get up to 6rem */
+  --page-pad: clamp(1rem, 10vw - 1.5rem, 6rem);
   margin: 0;
   padding: var(--page-pad) var(--page-pad) 0;
   font-family: system-ui, -apple-system, sans-serif;
