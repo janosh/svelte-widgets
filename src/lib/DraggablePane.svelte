@@ -1,6 +1,10 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
-  import type { HTMLAttributes, HTMLButtonAttributes } from 'svelte/elements'
+  import type {
+    HTMLAttributes,
+    HTMLButtonAttributes,
+    SVGAttributes,
+  } from 'svelte/elements'
   import type { ResizableOptions } from './attachments/index'
   import { click_outside, draggable, resizable, tooltip } from './attachments/index'
   import Icon from './Icon.svelte'
@@ -59,7 +63,7 @@
     closed_icon?: IconData
     // Attributes for the bundled icon (sizing is the common case, like ThemeToggle's);
     // reach for `toggle` only to replace it
-    icon_props?: HTMLAttributes<SVGSVGElement>
+    icon_props?: Omit<SVGAttributes<SVGSVGElement>, `path` | `stroke` | `viewBox`>
     // Horizontal edge shared by the toggle and pane before dragging.
     align?: `start` | `end`
     // Gap between the aligned edges and below the toggle.

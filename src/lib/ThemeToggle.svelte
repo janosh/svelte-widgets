@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import type { HTMLAttributes } from 'svelte/elements'
+  import type { HTMLAttributes, SVGAttributes } from 'svelte/elements'
   import { tooltip, type TooltipOptions } from './attachments/index'
   import Icon from './Icon.svelte'
   import { Monitor, Moon, Sun } from './icons'
@@ -20,7 +20,7 @@
     ...rest
   }: HTMLAttributes<HTMLButtonElement> & {
     tooltip?: TooltipOptions | false
-    icon_props?: HTMLAttributes<SVGSVGElement>
+    icon_props?: Omit<SVGAttributes<SVGSVGElement>, `path` | `stroke` | `viewBox`>
     labels?: Partial<ThemeToggleLabels>
   } = $props()
 

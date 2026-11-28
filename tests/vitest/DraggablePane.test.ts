@@ -787,7 +787,7 @@ describe(`DraggablePane`, () => {
     },
   )
 
-  test(`spreads consumer props without losing its own class, role or click`, async () => {
+  test(`spreads consumer props (icon_props included) without losing its own class, role or click`, async () => {
     const onclick = vi.fn()
     const pane_props = {
       class: `consumer-pane`,
@@ -800,9 +800,17 @@ describe(`DraggablePane`, () => {
     Reflect.set(pane_props, `role`, `region`)
     Reflect.set(pane_props, `aria-modal`, `true`)
     Reflect.set(toggle_props, `type`, `submit`)
-    const { toggle, pane } = await setup({ pane_props, toggle_props })
+    // SVG attributes, so the bundled icon can be sized without a style string
+    const icon_props = { width: 20, height: 20, class: `consumer-icon` }
+    const { toggle, pane } = await setup({ pane_props, toggle_props, icon_props })
 
     expect(pane.id).toBe(`my-pane`)
+    const icon = toggle.querySelector(`svg`)
+    expect([icon?.getAttribute(`width`), icon?.getAttribute(`height`)]).toEqual([
+      `20`,
+      `20`,
+    ])
+    expect(icon?.classList).toContain(`consumer-icon`)
     // role, aria-modal, data-resize and type sit after the spread so a consumer cannot
     // clobber them into broken semantics (lost dialog role, trapped SRs, form-posting toggle)
     expect([pane.getAttribute(`role`), pane.dataset.resize]).toEqual([`dialog`, `none`])
