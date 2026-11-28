@@ -821,6 +821,25 @@ describe(`Nav`, () => {
             two_columns ? (idx < rows ? `first` : `last`) : null,
           ),
         )
+        // the first and last item of each column (link or heading) squares its inner corner
+        // there, so its band or hover meets the rule flush
+        const column_ends = links_and_headings.flatMap((el, idx) =>
+          two_columns && [0, rows - 1, rows, links_and_headings.length - 1].includes(idx)
+            ? [el]
+            : [],
+        )
+        expect(column_ends.map((el) => el.getAttribute(`data-edge`))).toEqual(
+          two_columns ? [`top`, `bottom`, `top`, `bottom`] : [],
+        )
+        expect(
+          column_ends.map((el) => {
+            const style = getComputedStyle(el)
+            const first = el.getAttribute(`data-column`) === `first`
+            if (el.getAttribute(`data-edge`) === `top`)
+              return first ? style.borderStartEndRadius : style.borderStartStartRadius
+            return first ? style.borderEndEndRadius : style.borderEndStartRadius
+          }),
+        ).toEqual(column_ends.map(() => `0`))
       },
     )
     test.each([

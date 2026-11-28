@@ -241,10 +241,11 @@
 <svelte:window {onkeydown} bind:innerWidth={viewport_width} />
 
 <!-- column: which outer edge of a multi-column dropdown the item sits against -->
-{#snippet default_link(route: Route, column?: `first` | `last`)}
+{#snippet default_link(route: Route, column?: `first` | `last`, edge?: string)}
   {#if route.disabled || route.href === undefined}
     <span
       data-column={column}
+      data-edge={edge}
       class={[{ disabled: route.disabled }, route.class]}
       style={route.style}
       aria-disabled={route.disabled || undefined}
@@ -259,6 +260,7 @@
       title={route.title ?? link_props?.title}
       aria-current={is_current(route)}
       data-column={column}
+      data-edge={edge}
       class={[route.class, link_props?.class]}
       style={`${link_props?.style ?? ``}; ${route.style ?? ``}`}
       onclick={chain_handlers(
@@ -399,6 +401,15 @@
                     ? `first`
                     : `last`
                   : undefined}
+                <!-- top/bottom of its column: the inner corner there meets the rule square -->
+                {@const edge = two_columns
+                  ? [
+                      (slot === 0 || slot === n_rows) && `top`,
+                      (slot === n_rows - 1 || slot === items.length - 1) && `bottom`,
+                    ]
+                      .filter(Boolean)
+                      .join(` `) || undefined
+                  : undefined}
                 {#if typeof item === `string`}
                   <!-- a heading topping column 2 gets no top margin -->
                   <div
@@ -407,11 +418,12 @@
                       { 'column-start': two_columns && slot === n_rows },
                     ]}
                     data-column={column}
+                    data-edge={edge}
                   >
                     {item}
                   </div>
                 {:else}
-                  {@render default_link(item, column)}
+                  {@render default_link(item, column, edge)}
                 {/if}
               {/each}
               <!-- pinned to the middle grid track, so the links flow around it -->
@@ -643,6 +655,21 @@
       border-end-end-radius: 0;
     }
   }
+  /* an item topping or ending a column squares the inner corner there, so its band or
+     hover meets the column rule flush */
+  .two-columns [data-column='first'][data-edge~='top'] {
+    border-start-end-radius: 0;
+  }
+  .two-columns [data-column='first'][data-edge~='bottom'] {
+    border-end-end-radius: 0;
+  }
+  .two-columns [data-column='last'][data-edge~='top'] {
+    border-start-start-radius: 0;
+  }
+  .two-columns [data-column='last'][data-edge~='bottom'] {
+    border-end-start-radius: 0;
+  }
+  /* a heading topping a column follows the panel's outer corner */
   .two-columns .submenu-section[data-column='first']:first-child {
     border-start-start-radius: calc(var(--nav-radius, 6pt) - 1px);
   }
