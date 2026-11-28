@@ -234,9 +234,7 @@ for (const [stored_mode, width] of [
 
     await page.route(/\.(?:js|ts|svelte)(?:\?.*)?$/u, (route) => route.abort())
     await page.goto(`/json-tree`)
-    // below Nav's 767px breakpoint the server still renders the desktop menu, which
-    // hydration swaps for the burger: a known shift this test leaves to a Nav fix
-    if (width > 767) expect(await nav_box()).toEqual(hydrated_nav)
+    expect(await nav_box()).toEqual(hydrated_nav)
     const icons = page.locator(`.site-header nav button[aria-label] svg[data-mode]`)
     await expect(icons).toHaveCount(3)
     expect(

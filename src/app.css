@@ -85,15 +85,20 @@ body > div {
   gap: var(--docs-gap);
   /* first lines share a baseline, so a page's title sits level with the TOC title */
   align-items: baseline;
-  max-width: var(--docs-width);
-  /* centered, then nudged right so the text sits under the centered header, as far as the
-     right edge allows: the nudge never narrows the columns */
-  margin: 0 auto 3em
-    clamp(0px, (100% - var(--docs-width)) / 2 + 3.375rem, 100% - var(--docs-width));
+  max-width: var(--main-max-width);
+  margin: 0 auto 3em;
   flex: 1;
   @media (min-width: 1100px) {
     &:has(aside.toc > nav) {
       grid-template-columns: minmax(0, 1fr) var(--toc-width);
+      max-width: var(--docs-width);
+      /* centered, then nudged right so the text sits under the centered header, as far as
+         the right edge allows: the nudge never narrows the columns */
+      margin-left: clamp(
+        0px,
+        (100% - var(--docs-width)) / 2 + 3.375rem,
+        100% - var(--docs-width)
+      );
     }
   }
   aside.toc a {

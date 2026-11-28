@@ -94,6 +94,7 @@
   let viewport_width = $state(globalThis.innerWidth ?? Infinity)
   const is_mobile = $derived(viewport_width <= breakpoint)
   const unique_id = $props.id()
+  const script_tag = `script` // a literal tag in the template would end this <script>
   const panel_id = `nav-menu-${unique_id}`
   const change_open = track_open<NavCloseVia>(
     () => open,
@@ -417,6 +418,9 @@
     {/each}
     {@render children?.({ open, panel_id, routes })}
   </div>
+  <!-- the server can't know the viewport and renders the desktop menu: this runs before the
+  first paint and applies the mobile layout hydration would (script_tag: see its comment) -->
+  {@html `<${script_tag}>document.currentScript.parentElement.classList.toggle('mobile', innerWidth <= ${Number(breakpoint)})</${script_tag}>`}
 </nav>
 
 <style>
