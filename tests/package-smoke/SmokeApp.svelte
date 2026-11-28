@@ -55,7 +55,7 @@
     file_drop,
     escape_layer,
   } from 'svelte-widgets/attachments'
-  import { count_lines } from 'svelte-widgets/code-editor'
+  import { split_text_lines } from 'svelte-widgets/code-editor'
   // oxlint-disable-next-line import/no-unassigned-import -- verifies the CSS export bundles
   import 'svelte-widgets/code-editor/editor.css'
   // oxlint-disable-next-line import/no-unassigned-import -- verifies the CSS export bundles
@@ -121,7 +121,7 @@
     typeof file_drop === `function` &&
     typeof escape_layer === `function` &&
     typeof create_find_state === `function` &&
-    count_lines(`one\ntwo`) === 2 &&
+    split_text_lines(`one\ntwo`).length === 2 &&
     editor_model.text() === `a\nb` &&
     editor_model.line_count === 2 &&
     storage_get(`package-smoke-missing`) === null &&

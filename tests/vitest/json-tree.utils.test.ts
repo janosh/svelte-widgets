@@ -14,7 +14,7 @@ import {
   is_expandable,
   is_expandable_type,
   is_url,
-  matches_search,
+  node_matches_search,
   parse_edited_value,
   relative_path_segments,
   serialize_for_copy,
@@ -174,7 +174,7 @@ it(`serializes shared and circular references in objects, Maps and Sets`, () => 
   }
 })
 
-describe(`matches_search`, () => {
+describe(`node_matches_search`, () => {
   it.each([
     // empty query
     [`key`, `value`, ``, false],
@@ -200,8 +200,8 @@ describe(`matches_search`, () => {
     [`key`, [1, 2, 3], `1`, false],
     // null key (root)
     [null, `value`, `root`, false],
-  ] as const)(`matches_search(%p, %p, %p) = %p`, (key, value, query, expected) => {
-    expect(matches_search(key, value, query)).toBe(expected)
+  ] as const)(`node_matches_search(%p, %p, %p) = %p`, (key, value, query, expected) => {
+    expect(node_matches_search(key, value, query)).toBe(expected)
   })
 })
 

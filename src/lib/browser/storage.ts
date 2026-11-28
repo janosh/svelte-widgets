@@ -1,7 +1,7 @@
 // Best-effort localStorage: disabled/private/full stores become no-ops so in-memory UI
 // state still works. Also provides persisted choices and MRU lists.
 
-import { clamp_integer, is_object } from '../utils'
+import { clamp_integer } from '../utils'
 
 // Single catch-all for storage failures; callers retain working state in memory.
 const guarded = <Result>(access: () => Result, fallback: Result): Result => {
@@ -28,17 +28,6 @@ export const storage_get_json = (key: string, fallback: unknown): unknown =>
 export const storage_set_json = (key: string, value: object): void => {
   const serialized = guarded(() => JSON.stringify(value), undefined)
   if (serialized !== undefined) storage_set(key, serialized)
-}
-
-const is_finite_number = (value: unknown): value is number =>
-  typeof value === `number` && Number.isFinite(value)
-
-// Persisted panel size; null when missing/invalid so callers use their default.
-export const storage_get_size = (key: string): { w: number; h: number } | null => {
-  const size: unknown = storage_get_json(key, null)
-  if (!is_object(size)) return null
-  const { w, h } = size
-  return is_finite_number(w) && is_finite_number(h) ? { w, h } : null
 }
 
 // Stored option while valid, otherwise fallback. Pair with storage_set on change.

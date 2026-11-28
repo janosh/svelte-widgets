@@ -183,8 +183,6 @@ export const split_text_lines = (text: string): string[] => {
   if (lines.length > 1 && lines.at(-1) === ``) lines.pop()
   return lines
 }
-export const count_lines = (text: string): number =>
-  text === `` ? 0 : split_text_lines(text).length
 export type LineWindow = { start: number; end: number }
 const non_negative = (value: number): number =>
   Number.isFinite(value) ? Math.max(0, value) : 0

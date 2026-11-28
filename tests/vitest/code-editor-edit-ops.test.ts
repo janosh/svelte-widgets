@@ -1,10 +1,10 @@
 import {
   auto_close_pair,
   auto_indent_newline,
-  count_lines,
   create_editor_model,
   dedent_selection,
   indent_selection,
+  split_text_lines,
   toggle_line_comment,
   visible_line_window,
 } from '#lib/code-editor/index.ts'
@@ -140,14 +140,15 @@ test.each([
   expect([start, end]).toEqual(expected)
 })
 
+// a single trailing newline ends the last line rather than opening an empty one
 test.each([
-  [``, 0],
-  [`one`, 1],
-  [`one\n`, 1],
-  [`one\r\ntwo`, 2],
-  [`one\n\n`, 2],
-])(`count_lines(%j) is %i`, (text, expected) => {
-  expect(count_lines(text)).toBe(expected)
+  [``, [``]],
+  [`one`, [`one`]],
+  [`one\n`, [`one`]],
+  [`one\r\ntwo\rthree`, [`one`, `two`, `three`]],
+  [`one\n\n`, [`one`, ``]],
+])(`split_text_lines(%j) is %j`, (text, expected) => {
+  expect(split_text_lines(text)).toEqual(expected)
 })
 
 test.each([
