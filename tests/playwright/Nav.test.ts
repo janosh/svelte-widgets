@@ -691,6 +691,26 @@ test(`the mobile menu clears the burger and mirrors its inset`, async ({ page })
   ).toBeCloseTo(burger_box.x, 0)
 })
 
+// Every page, linked from the site nav or not, renders exactly one <main> landmark: the
+// docs styles and heading selectors scope to it, and a second or missing one breaks both
+test(`every page renders exactly one main landmark`, async ({ request }) => {
+  const home = await (await request.get(`/`)).text()
+  const linked = [...home.matchAll(/<a[^>]+href="(?<href>\/[^"#?]*)"/gu)].map(
+    ({ groups }) => groups?.href ?? ``,
+  )
+  const routes = [...new Set([...linked, `/markdown`, `/changelog`, `/contributing`])]
+  expect(routes.length).toBeGreaterThan(40)
+  // markup only: inlined styles and scripts may mention the tag
+  const count_mains = async (route: string) =>
+    (await (await request.get(route)).text())
+      .replaceAll(/<(?<tag>style|script)[\s\S]*?<\/\k<tag>>/gu, ``)
+      .match(/<main[\s>]/gu)?.length ?? 0
+  const counts = await Promise.all(
+    [...routes, `/no-such-page`].map(async (route) => [route, await count_mains(route)]),
+  )
+  expect(counts.filter(([, count]) => count !== 1)).toEqual([])
+})
+
 test(`demo section navigation and titles render before hydration`, async ({
   request,
 }) => {

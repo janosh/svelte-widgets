@@ -158,7 +158,6 @@
 <div class="docs-body">
   <div
     data-pagefind-body
-    style="display: contents"
     {@attach highlight_matches({
       query: page_search_query,
       css_class: `page-search-match`,

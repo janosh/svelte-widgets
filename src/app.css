@@ -6,7 +6,6 @@
   --accent-color: light-dark(#4a7abf, cornflowerblue);
   --accent-hover-color: orange;
   --main-max-width: 50em;
-  --toc-width: 18rem;
   --nav-link-active-color: var(--accent-color);
   --bg: light-dark(#fafafa, #141418);
   --text-color: light-dark(#222, #ccc);
@@ -24,7 +23,7 @@ html {
   color-scheme: dark light;
 }
 body {
-  --page-pad: clamp(1rem, 3vw, 2rem);
+  --page-pad: clamp(1rem, 7vw, 6rem);
   margin: 0;
   padding: var(--page-pad) var(--page-pad) 0;
   font-family: system-ui, -apple-system, sans-serif;
@@ -78,11 +77,8 @@ body > div {
   --toc-min-width: 0;
   --toc-mobile-bg: light-dark(#fff, #222226);
   --toc-active-color: var(--accent-color);
-  --docs-gap: 1.25rem;
-  /* the text column gives up 1.5rem so the TOC moves half as far right as the text */
-  --docs-width: calc(var(--main-max-width) - 1.5rem + var(--docs-gap) + var(--toc-width));
   display: grid;
-  gap: var(--docs-gap);
+  gap: 1.25rem;
   /* first lines share a baseline, so a page's title sits level with the TOC title */
   align-items: baseline;
   max-width: var(--main-max-width);
@@ -90,28 +86,34 @@ body > div {
   flex: 1;
   @media (min-width: 1100px) {
     &:has(aside.toc > nav) {
-      grid-template-columns: minmax(0, 1fr) var(--toc-width);
-      max-width: var(--docs-width);
-      /* centered, then nudged right so the text sits under the centered header, as far as
-         the right edge allows: the nudge never narrows the columns */
-      margin-left: clamp(
-        0px,
-        (100% - var(--docs-width)) / 2 + 3.375rem,
-        100% - var(--docs-width)
-      );
+      /* text and TOC as one centered block, the TOC only as wide as its entries, so the
+         space left of the text matches the space right of the TOC */
+      grid-template-columns: minmax(0, var(--main-max-width)) auto;
+      justify-content: center;
+      max-width: none;
     }
   }
   aside.toc a {
     color: inherit; /* Toc uses :where(); else global `a` paints every item accent */
   }
+  aside.toc.desktop {
+    /* Toc's default 3em inset would double the visible gap to the text, and a right inset
+       would unbalance the centered block */
+    --toc-padding: 1em 0 0 0.75em;
+    --toc-width: max-content;
+    --toc-desktop-max-width: 18rem;
+  }
   aside.toc.mobile {
     /* The fixed mobile TOC owns its dimensions and occupies no grid track. */
     margin: 0;
   }
-  main {
-    margin: 0;
+  /* the page itself is the grid item, whether or not it renders a main element */
+  > [data-pagefind-body] {
     /* Keep wide tables/code from expanding the grid beyond the viewport. */
     min-width: 0;
+    main {
+      margin: 0;
+    }
   }
 }
 main {
