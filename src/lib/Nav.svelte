@@ -102,14 +102,14 @@
   $effect(() => {
     const via = pending_via ?? `programmatic`
     pending_via = null
-    if (open !== was_open) {
-      if (open) on_open?.({ via: via === `trigger` ? via : `programmatic` })
-      else {
-        open_dropdown = null
-        on_close?.({ via })
-      }
-    }
+    if (open === was_open) return
+    // recorded before the callbacks, so one that flips `open` back is seen as a new change
     was_open = open
+    if (open) on_open?.({ via: via === `trigger` ? via : `programmatic` })
+    else {
+      open_dropdown = null
+      on_close?.({ via })
+    }
   })
   $effect(() => {
     if (open_dropdown && !checked_routes.includes(open_dropdown)) open_dropdown = null

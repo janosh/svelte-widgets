@@ -3177,6 +3177,10 @@ describe(`DataTable`, () => {
       expect(n_selected()).toBe(4)
       // a focused resize handle lets the copy through
       expect(copy_cells(doc_query(`.resize-handle`))).toBe(`Model A\t0.95\nModel B\t0.85`)
+      // the keyboard copy confirms like the menu's Copy, without a second clipboard write
+      await tick()
+      expect(document.querySelector(`.copy-toast`)?.textContent).toBe(`Copied!`)
+      expect(write_clipboard).not.toHaveBeenCalled()
 
       drag_cells([0, 0], [0, 0])
       drag_cells([2, 2], [2, 2], { shiftKey: true })

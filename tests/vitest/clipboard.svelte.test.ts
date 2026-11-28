@@ -179,6 +179,42 @@ test(`copy_text announces through a live region and restarts the fade`, async ()
   expect([live()?.textContent, cancel.mock.calls.length]).toEqual([`second`, 1]) // immediate
   await vi.advanceTimersByTimeAsync(1000)
   expect(live()?.textContent).toBe(``)
+  // a copy landing inside the first one's insertion delay waits out only its remainder
+  live()?.remove()
+  await copy_text(`c`, { labels: { success: `third` } })
+  await vi.advanceTimersByTimeAsync(60)
+  await copy_text(`d`, { labels: { success: `fourth` } })
+  expect(live()?.textContent).toBe(``)
+  await vi.advanceTimersByTimeAsync(40)
+  expect(live()?.textContent).toBe(`fourth`)
+})
+
+// activeElement stops at a shadow host; the default anchor and modal lookup use the
+// element focused inside it, and a custom write replaces the clipboard write
+test(`copy_text defaults to the focus inside open shadow roots`, async () => {
+  const dialog = document.createElement(`dialog`)
+  const shadow_host = document.createElement(`div`)
+  document.body.append(shadow_host)
+  const shadow = shadow_host.attachShadow({ mode: `open` })
+  shadow.append(dialog)
+  const inner = element_at(new DOMRect(30, 50, 70, 20), dialog)
+  vi.spyOn(Element.prototype, `closest`).mockImplementation(function (this: Element) {
+    return dialog.contains(this) ? dialog : null
+  })
+  Object.defineProperty(shadow, `activeElement`, { value: inner, configurable: true })
+  inner.focus()
+  Object.defineProperty(document, `activeElement`, {
+    value: shadow_host,
+    configurable: true,
+  })
+  const write = vi.fn(async () => {})
+  expect(await copy_text(`x`, { write })).toBe(true)
+  expect([write.mock.calls, write_text.mock.calls.length]).toEqual([[[`x`]], 0])
+  const shadow_toast = dialog.querySelector<HTMLElement>(`.copy-toast`)
+  expect(shadow_toast?.style.left).toBe(`106px`)
+  Reflect.deleteProperty(document, `activeElement`)
+  vi.restoreAllMocks()
+  shadow_host.remove()
 })
 
 test(`copy_text resolves false and says so when the write fails`, async () => {

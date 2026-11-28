@@ -1124,6 +1124,8 @@
   const cell_selection = cell_range_select(selection, {
     cell_at: (target) => (tbody_el ? cell_in(target, tbody_el) : null),
     cell_text: selected_cell_text,
+    // the copy event already filled the clipboard, so only confirm it
+    on_copy: (text) => void copy_text(text, { write: async () => {} }),
   })
   const copy_selected_cells = () => void copy_text(selection.to_tsv(selected_cell_text))
   // Every sorted+filtered value of one column (all pages), one per line

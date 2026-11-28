@@ -143,6 +143,19 @@ describe(`Nav`, () => {
     flushSync()
     expect([on_open.mock.calls, on_close.mock.calls]).toEqual([[], []])
   })
+  // the observer records the new state before the callback, so a callback that closes
+  // the menu again still gets its own on_close
+  test(`a callback flipping open back still reports that change`, async () => {
+    const on_close = vi.fn()
+    const on_open = vi.fn(() => doc_query(`.burger`).click())
+    mount_nav({ routes: default_routes, on_open, on_close })
+    await click(doc_query(`.burger`))
+    flushSync()
+    expect([on_open.mock.calls.length, on_close.mock.calls]).toEqual([
+      1,
+      [[{ via: `trigger` }]],
+    ])
+  })
   test(`burger bars take the shared --text-color`, () => {
     const host = document.createElement(`div`)
     host.style.setProperty(`--text-color`, `rgb(1, 2, 3)`)

@@ -59,6 +59,9 @@ export interface CopyTextOptions {
   anchor?: CopyAnchor
   labels?: { success?: string; error?: string }
   duration_ms?: number
+  // writes the text, navigator.clipboard.writeText by default; a no-op confirms a copy that
+  // already happened, such as a copy event's clipboardData
+  write?: (text: string) => Promise<void>
 }
 
 // One toast per page, so a new copy replaces the last confirmation instead of stacking. It is a
@@ -69,8 +72,10 @@ let toast: HTMLElement | null = null
 let live: HTMLElement | null = null
 let clear_timer: ReturnType<typeof setTimeout> | undefined
 let latest_copy = 0
-// screen readers often skip a message landing in a just-inserted live region
+// screen readers often skip a message landing in a just-inserted live region, so nothing is
+// announced until this long after the last insertion
 const FRESH_LIVE_DELAY_MS = 100
+let live_ready_at = 0
 
 const point_rect = (x: number, y: number) => ({ top: y, bottom: y, left: x, right: x })
 const anchor_rect = (anchor: CopyAnchor | undefined) => {
@@ -88,6 +93,12 @@ const modal_dialog = (node: Element | null): Element | null => {
   }
   return null
 }
+// activeElement is retargeted to the shadow host, so descend through open shadow roots
+const focused_element = () => {
+  let el = document.activeElement
+  while (el?.shadowRoot?.activeElement) el = el.shadowRoot.activeElement
+  return el
+}
 
 // Writes `text` to the clipboard, confirms it in a toast beside `anchor` and announces it to
 // screen readers. Resolves whether the write landed: a failure shows in the toast, so callers
@@ -96,13 +107,17 @@ export async function copy_text(
   text: string,
   options: CopyTextOptions = {},
 ): Promise<boolean> {
-  const { anchor = document.activeElement, labels = {}, duration_ms = 1000 } = options
+  const {
+    anchor = focused_element(),
+    labels = {},
+    duration_ms = 1000,
+    write = (content: string) => navigator.clipboard.writeText(content),
+  } = options
   // measured now: the anchor may re-render or detach while the write settles
   const rect = anchor_rect(anchor)
   // a modal dialog makes the rest of the page inert, hiding a toast outside it from screen readers
   const host =
-    modal_dialog(anchor instanceof Element ? anchor : document.activeElement) ??
-    document.body
+    modal_dialog(anchor instanceof Element ? anchor : focused_element()) ?? document.body
   if (!toast || !live) {
     toast = document.createElement(`div`)
     toast.className = `copy-toast`
@@ -121,8 +136,10 @@ export async function copy_text(
   el.textContent = ``
   region.textContent = ``
   el.style.opacity = `0`
-  const fresh_live = region.parentElement !== host
-  if (fresh_live) host.append(region)
+  if (region.parentElement !== host) {
+    host.append(region)
+    live_ready_at = Date.now() + FRESH_LIVE_DELAY_MS
+  }
   if (el.parentElement !== host) host.append(el)
   // re-shown each time so it stacks above top-layer surfaces opened since the last copy
   if (el.popover) {
@@ -133,7 +150,7 @@ export async function copy_text(
   const copy_id = ++latest_copy
   let copied = true
   try {
-    await navigator.clipboard.writeText(text)
+    await write(text)
   } catch {
     copied = false
   }
@@ -142,7 +159,8 @@ export async function copy_text(
   const announce = () => {
     if (copy_id === latest_copy) region.textContent = message
   }
-  if (fresh_live) setTimeout(announce, FRESH_LIVE_DELAY_MS)
+  const live_wait = live_ready_at - Date.now()
+  if (live_wait > 0) setTimeout(announce, live_wait)
   else announce()
   el.textContent = message
   el.toggleAttribute(`data-error`, !copied)
