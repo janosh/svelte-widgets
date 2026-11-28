@@ -548,7 +548,7 @@
           options: effective_options,
           matching_options,
         }) || null
-      : (create_option_msg ?? null),
+      : create_option_msg,
   )
 
   // active state of the user-message <li> (dupe / create / no-match)
@@ -711,16 +711,12 @@
         `MultiSelect: cannot add an empty option, got ${JSON.stringify(option_to_add)}`,
       )
     }
-    return add_valid_option(option_to_add, event, from_paste)
+    return add_valid_option(option_to_add, from_paste)
   }
 
   // from_paste skips option reconstruction so parse_paste() objects keep extra fields
   // (value/group/metadata) instead of being stripped
-  async function add_valid_option(
-    option_to_add: Option,
-    event: Event,
-    from_paste = false,
-  ) {
+  async function add_valid_option(option_to_add: Option, from_paste = false) {
     // an async on_create lets the user keep typing, so only a draft still equal to the
     // submitted text is consumed. Pastes never consume it: handle_paste clears it once.
     const submitted_search = search_text
@@ -1207,7 +1203,7 @@
     on_change?.({ options: selected, type: `remove_all` })
   }
 
-  function apply_bulk_add(options_to_add: Option[], event: Event): Option[] {
+  function apply_bulk_add(options_to_add: Option[]): Option[] {
     const unselected = get_unique_bulk_options(options_to_add)
     const remaining = Math.max(0, (max_select ?? Infinity) - selected.length)
     const added = unselected.slice(0, remaining)
@@ -1222,12 +1218,8 @@
   }
 
   // used by select_all and group select
-  function batch_add_options(
-    options_to_add: Option[],
-    event: Event,
-    scope?: SelectAllScope,
-  ) {
-    const added = apply_bulk_add(options_to_add, event)
+  function batch_add_options(options_to_add: Option[], scope?: SelectAllScope) {
+    const added = apply_bulk_add(options_to_add)
     if (added.length > 0) {
       on_select_all?.({ options: added, scope })
       on_change?.({ options: selected, type: `select_all` })
@@ -1271,7 +1263,7 @@
 
   function select_all(event: Event) {
     event.stopPropagation()
-    batch_add_options(select_all_candidates, event, select_all_scope)
+    batch_add_options(select_all_candidates, select_all_scope)
   }
 
   function get_select_all_disabled_title(
@@ -1308,7 +1300,7 @@
     event: Event,
   ) {
     event.stopPropagation()
-    if (!all_selected) return batch_add_options(selectable, event)
+    if (!all_selected) return batch_add_options(selectable)
     // never drop below min_select, matching remove_all and per-chip removal
     const keys_to_remove = new Set(selectable.map((opt) => key(opt)))
     const identities_to_remove = duplicates === true ? count_options(selectable) : null
@@ -1377,7 +1369,7 @@
       Math.min(anchor_idx, target_idx),
       Math.max(anchor_idx, target_idx) + 1,
     )
-    const added = apply_bulk_add(candidates, event)
+    const added = apply_bulk_add(candidates)
     const anchor_option = visible_options[anchor_idx]
     range_anchor = { option: anchor_option, idx: anchor_idx }
     if (added.length > 0) {
@@ -1513,7 +1505,7 @@
     // closing first breaks option selection on touch
     // https://github.com/janosh/svelte-widgets/issues/335
     if (
-      !portal_params?.active &&
+      !portal_params.active &&
       (!(event.relatedTarget instanceof Node) ||
         !outer_div?.contains(event.relatedTarget))
     )
@@ -1831,7 +1823,7 @@
         scroll_to_match: false,
         // don't highlight text in the "Create this option..." message
         node_filter: (node) =>
-          node?.parentElement?.closest(`li.user-msg`)
+          node.parentElement?.closest(`li.user-msg`)
             ? NodeFilter.FILTER_REJECT
             : NodeFilter.FILTER_ACCEPT,
       })}

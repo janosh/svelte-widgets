@@ -8,7 +8,7 @@
   import { escape_layer } from './attachments/shared'
   import { create_find_state, type FindOptions } from './find-in-page.svelte.ts'
   import Icon from './Icon.svelte'
-  import { merge_defaults, FIND_BAR_LABELS, type FindBarLabels } from './labels'
+  import { merge_defaults, FIND_BAR_LABELS } from './labels'
 
   type Props = Omit<HTMLAttributes<HTMLDivElement>, `children`> &
     FindOptions & {

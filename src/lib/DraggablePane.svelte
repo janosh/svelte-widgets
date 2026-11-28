@@ -144,10 +144,12 @@
     Math.max(viewport_margin_px, Math.min(value, upper))
 
   // Undragged: under the toggle; fixed panes also stay in the viewport
-  const anchor_position = (): { left: number; top: number } => {
-    if (!toggle_btn) return fallback_position
-    const toggle_rect = toggle_btn.getBoundingClientRect()
-    const pane_width = pane?.getBoundingClientRect().width || default_pane_width_px
+  const anchor_position = (
+    toggle_node: HTMLButtonElement,
+    pane_node: HTMLDivElement,
+  ): { left: number; top: number } => {
+    const toggle_rect = toggle_node.getBoundingClientRect()
+    const pane_width = pane_node.getBoundingClientRect().width || default_pane_width_px
     const [offset_x, offset_y] = [offset.x ?? 5, offset.y ?? 5]
     // the anchor in viewport coordinates; each strategy below restates it in its own space
     const left =
@@ -169,7 +171,7 @@
 
     // The pane's containing block, not the toggle's: the siblings usually share one, but
     // toggle_props can position the toggle independently.
-    const ancestor = pane?.offsetParent
+    const ancestor = pane_node.offsetParent
     // No positioned ancestor means the pane is placed against the document
     if (!ancestor) {
       return { left: left + globalThis.scrollX, top: top + globalThis.scrollY }
@@ -187,9 +189,9 @@
   // --pane-viewport-clamp (min()'d with --pane-max-height in CSS) keeps a fixed pane above the
   // bottom edge and is rewritten on every move, else a reset after a drag plus window resize
   // keeps a stale cap.
-  const position_pane = () => {
+  const position_pane = (toggle_node: HTMLButtonElement) => {
     if (!pane) return
-    const { left, top } = anchor_position()
+    const { left, top } = anchor_position(toggle_node, pane)
     Object.assign(pane.style, { left: `${left}px`, top: `${top}px`, right: `auto` })
     if (position === `fixed`) {
       const available = globalThis.innerHeight - top - viewport_margin_px
@@ -206,7 +208,7 @@
   }
 
   const reanchor = () => {
-    if (open && toggle_btn && !has_been_dragged) position_pane()
+    if (open && toggle_btn && !has_been_dragged) position_pane(toggle_btn)
   }
   $effect(reanchor)
   // Async content, fonts and CSS size changes can move the anchored edges without a

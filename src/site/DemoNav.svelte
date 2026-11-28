@@ -1,11 +1,8 @@
 <script lang="ts">
   import { page } from '$app/state'
   import { Nav, ThemeToggle } from '#lib'
-  import type { ComponentProps } from 'svelte'
   import { demo_nav_routes, multiselect_recipes } from '../routes/(demos)'
   import { demo_link, resolve_demo_path as resolve_path } from './paths'
-
-  let props: Partial<ComponentProps<typeof Nav>> = $props()
 
   const prefixed_routes = [
     { href: resolve_path(`/`), label: `Home` },
@@ -24,7 +21,7 @@
   )
 </script>
 
-<Nav {...props} routes={prefixed_routes} {pathname}>
+<Nav routes={prefixed_routes} {pathname}>
   {#snippet item({ route })}
     {#if route.href?.includes(`/attachments/`)}
       <code>{route.label}</code>

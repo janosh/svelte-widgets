@@ -79,7 +79,7 @@
 
   // Infer language from the filename extension.
   function lang_from_title(title: string): string | undefined {
-    const ext = title.match(/\.(?<ext>\w+)$/u)?.groups?.ext?.toLowerCase()
+    const ext = title.match(/\.(?<ext>\w+)$/u)?.groups?.ext.toLowerCase()
     return ext ? (ext_to_lang[ext] ?? ext) : undefined
   }
 </script>

@@ -10,7 +10,6 @@
   import type { Placement, PositionOptions } from './position'
 
   type PopupRole = `alertdialog` | `dialog` | `menu` | `listbox` | `tree` | `grid`
-  type PopupHasPopup = Exclude<PopupRole, `alertdialog`>
   type TriggerProps = PopoverTriggerProps
   type TriggerMode = `click` | `hover` | `focus`
   const unique_id = $props.id()

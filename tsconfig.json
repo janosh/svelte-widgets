@@ -2,6 +2,9 @@
   "extends": "$app/tsconfig",
   "compilerOptions": {
     "strict": true,
+    // svelte-check is the only Svelte-aware linter for script-only names; oxlint skips .svelte
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     // Self-imports by package name resolve to source (exports point at dist). A stateful
     // export like `svelte-widgets/theme` is `theme.svelte.ts`, which the second location finds
     "paths": {

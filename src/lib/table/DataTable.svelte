@@ -17,7 +17,6 @@
   import type { CmdAction, CmdSection } from '../types'
   import {
     clamp,
-    escape_html,
     html_to_text,
     is_plain_object,
     same_while_equal,
@@ -29,23 +28,17 @@
   import DateTimeFormatMenu from './DateTimeFormatMenu.svelte'
   import type {
     CellColor,
-    CellSnippet,
     CellVal,
     ColorStats,
     Column,
     ColumnPrefs,
     ColumnStats,
     DateTimeFormatMode,
-    Pagination,
     PinSide,
     RowData,
     RowId,
-    Search,
-    SortHint,
     SummaryStat,
     TableExportFormat,
-    TableSort,
-    VirtualScroll,
     DataTableProps,
   } from './data-table'
   import { compute_column_stats, NULL_CELL_COLOR, resolve_domain } from './data-table'
@@ -75,18 +68,17 @@
     INTERACTIVE_SELECTOR,
   } from './selection.svelte.ts'
   import type { CellPos, ColumnFilterValue, TableMatrix } from './types'
-  import { type Snippet, tick, untrack } from 'svelte'
+  import { tick, untrack } from 'svelte'
   import { flip } from 'svelte/animate'
-  import type { HTMLAttributes } from 'svelte/elements'
 
   let {
     data: input_data = [],
     columns: given_columns = [],
-    sort_hint = undefined,
+    sort_hint,
     cell,
     controls,
     sort = $bindable([]),
-    default_num_format = undefined,
+    default_num_format,
     // a column's d3 spec when it has one, else locale-aware Intl
     format_number = (num, format) =>
       format ? format_num(num, format) : format_locale(num),
