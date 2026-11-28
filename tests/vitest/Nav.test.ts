@@ -787,7 +787,7 @@ describe(`Nav`, () => {
       expect(hrefs(submenu)).toEqual(children.map(({ href }) => href))
     })
     // a heading never ends column 1 (rows grow by one instead) and one topping column 2
-    // draws no separator; a section name may head several runs
+    // gets no top margin; a section name may head several runs. Two columns get a rule.
     test.each([
       [[`a`, `a`, `a`, `b`, `b`, `b`], 1024, 7, 4, [false, true]],
       [[`a`, `a`, `a`, `b`, `b`, `b`], 500, 7, 4, [false, false]],
@@ -812,6 +812,15 @@ describe(`Nav`, () => {
         expect(
           headings.map((heading) => heading.classList.contains(`column-start`)),
         ).toEqual(column_starts)
+        const two_columns = submenu.classList.contains(`two-columns`)
+        expect(submenu.querySelectorAll(`.column-rule`)).toHaveLength(two_columns ? 1 : 0)
+        // bands and hovers round the side facing the other column, keyed on data-column
+        const links_and_headings = items.filter((el) => !el.matches(`.column-rule`))
+        expect(links_and_headings.map((el) => el.getAttribute(`data-column`))).toEqual(
+          links_and_headings.map((_, idx) =>
+            two_columns ? (idx < rows ? `first` : `last`) : null,
+          ),
+        )
       },
     )
     test.each([

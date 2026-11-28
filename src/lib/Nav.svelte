@@ -240,9 +240,11 @@
 
 <svelte:window {onkeydown} bind:innerWidth={viewport_width} />
 
-{#snippet default_link(route: Route)}
+<!-- column: which outer edge of a multi-column dropdown the item sits against -->
+{#snippet default_link(route: Route, column?: `first` | `last`)}
   {#if route.disabled || route.href === undefined}
     <span
+      data-column={column}
       class={[{ disabled: route.disabled }, route.class]}
       style={route.style}
       aria-disabled={route.disabled || undefined}
@@ -256,6 +258,7 @@
       rel={route.rel ?? link_props?.rel}
       title={route.title ?? link_props?.title}
       aria-current={is_current(route)}
+      data-column={column}
       class={[route.class, link_props?.class]}
       style={`${link_props?.style ?? ``}; ${route.style ?? ``}`}
       onclick={chain_handlers(
@@ -391,20 +394,28 @@
             <div class="submenu-inner">
               <!-- headings key on their slot: one section name may head several runs -->
               {#each items as item, slot (typeof item === `string` ? slot : item)}
+                {@const column = two_columns
+                  ? slot < n_rows
+                    ? `first`
+                    : `last`
+                  : undefined}
                 {#if typeof item === `string`}
-                  <!-- a heading topping column 2 draws no separator -->
+                  <!-- a heading topping column 2 gets no top margin -->
                   <div
                     class={[
                       `submenu-section`,
                       { 'column-start': two_columns && slot === n_rows },
                     ]}
+                    data-column={column}
                   >
                     {item}
                   </div>
                 {:else}
-                  {@render default_link(item)}
+                  {@render default_link(item, column)}
                 {/if}
               {/each}
+              <!-- pinned to the middle grid track, so the links flow around it -->
+              {#if two_columns}<span class="column-rule" aria-hidden="true"></span>{/if}
             </div>
           </div>
         </div>
@@ -557,7 +568,7 @@
   }
   .dropdown > div:last-child.visible.two-columns {
     display: grid;
-    grid-template-columns: repeat(2, max-content);
+    grid-template-columns: max-content 0.5px max-content; /* a hairline on HiDPI */
     grid-template-rows: repeat(var(--submenu-rows), auto);
     grid-auto-flow: column;
     column-gap: 0.25em;
@@ -583,18 +594,60 @@
     font-size: 0.9em;
     transition: background-color 0.15s;
   }
+  /* a shaded band; the text dims via color-mix, not opacity, which would fade the band too */
   .submenu-section {
-    padding: var(--nav-section-padding, 5pt 6pt 1pt);
+    padding: var(--nav-section-padding, 3pt 6pt);
+    margin-bottom: 2pt;
     font-size: var(--nav-section-font-size, 0.72em);
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    opacity: var(--nav-section-opacity, 0.6);
+    color: color-mix(
+      in srgb,
+      currentColor calc(var(--nav-section-opacity, 0.6) * 100%),
+      transparent
+    );
+    background-color: var(
+      --nav-section-bg,
+      light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.06))
+    );
     white-space: nowrap;
     &:not(:first-child, .column-start) {
       margin-top: 3pt;
-      border-top: 1px solid var(--nav-dropdown-border-color, var(--nav-surface-border));
     }
+    /* a band at the panel's top edge follows its rounded corners */
+    &:first-child {
+      border-start-start-radius: calc(var(--nav-radius, 6pt) - 1px);
+      border-start-end-radius: calc(var(--nav-radius, 6pt) - 1px);
+    }
+  }
+  .column-rule {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    margin-block: 6pt;
+    background-color: var(
+      --nav-column-rule-color,
+      light-dark(rgba(128, 128, 128, 0.15), rgba(200, 200, 200, 0.1))
+    );
+  }
+  /* in columns, bands and hovers round only the sides facing a neighbour column: outer
+     sides sit flush with the panel edge (a middle column would round all four) */
+  .two-columns :is(a, span.disabled, .submenu-section) {
+    border-radius: var(--nav-item-radius, 3pt);
+    &[data-column='first'] {
+      border-start-start-radius: 0;
+      border-end-start-radius: 0;
+    }
+    &[data-column='last'] {
+      border-start-end-radius: 0;
+      border-end-end-radius: 0;
+    }
+  }
+  .two-columns .submenu-section[data-column='first']:first-child {
+    border-start-start-radius: calc(var(--nav-radius, 6pt) - 1px);
+  }
+  .two-columns .submenu-section[data-column='last'].column-start {
+    border-start-end-radius: calc(var(--nav-radius, 6pt) - 1px);
   }
   .dropdown > div:last-child a:hover {
     background-color: var(--nav-link-bg-hover, rgba(0, 0, 0, 0.1));
