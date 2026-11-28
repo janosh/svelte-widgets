@@ -169,33 +169,24 @@ describe(`Dialog`, () => {
       await tick()
       expect(Boolean(surface()?.open)).toBe(initially_open)
       // Sheet forwards both callbacks to its Dialog, which reports each change once
-      const programmatic = [[{ via: `programmatic` }]]
-      expect([on_open.mock.calls, on_close.mock.calls]).toEqual([
-        programmatic,
-        programmatic,
-      ])
+      expect(on_open.mock.calls).toEqual([[{ via: `programmatic` }]])
+      expect(on_close.mock.calls).toEqual([[{ via: `programmatic` }]])
     },
   )
 
-  // each callback flips the state back once; the flip is a new change, reported in turn
+  // the first callback flips the state back once; the flip is a new change, reported in turn
   test.each([
     [`on_open closing`, true],
     [`on_close reopening`, false],
   ] as const)(`%s the dialog reports the flip back`, async (_label, flip_on_open) => {
-    let flipped = false
-    const flip_back = (open: boolean) => () => {
-      if (flipped) return
-      flipped = true
-      props.open = open
-    }
-    const on_open = vi.fn(flip_on_open ? flip_back(false) : undefined)
-    const on_close = vi.fn(flip_on_open ? undefined : flip_back(true))
+    const [on_open, on_close] = [vi.fn(), vi.fn()]
+    const [first, second] = flip_on_open ? [on_open, on_close] : [on_close, on_open]
+    first.mockImplementationOnce(() => (props.open = !flip_on_open))
     const props = mount_dialog({ open: !flip_on_open, on_open, on_close })
 
     await click(flip_on_open ? trigger() : item(`dialog-action`))
     await tick()
     expect([props.open, Boolean(surface()?.open)]).toEqual([!flip_on_open, !flip_on_open])
-    const [first, second] = flip_on_open ? [on_open, on_close] : [on_close, on_open]
     expect([first.mock.calls, second.mock.calls]).toEqual([
       [[{ via: flip_on_open ? `trigger` : `close` }]],
       [[{ via: `programmatic` }]],

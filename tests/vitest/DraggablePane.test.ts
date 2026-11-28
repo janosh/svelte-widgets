@@ -131,28 +131,23 @@ describe(`DraggablePane`, () => {
     [`close`, () => doc_query<HTMLButtonElement>(`.close-button`).click(), true],
     [`pointer`, () => press_release(document.body), false],
     [`escape`, () => press_escape(), false],
-  ] as const)(
-    `opens via trigger, closes via %s`,
-    async (via, dismiss, has_been_dragged) => {
-      const [on_open, on_close] = [vi.fn(), vi.fn()]
-      const { toggle, pane } = await open_pane({ on_open, on_close, has_been_dragged })
-      expect(on_open.mock.calls).toEqual([[{ via: `trigger` }]])
+  ] as const)(`opens, then closes via %s`, async (via, dismiss, has_been_dragged) => {
+    const [on_open, on_close] = [vi.fn(), vi.fn()]
+    const { toggle, pane } = await open_pane({ on_open, on_close, has_been_dragged })
+    expect(on_open.mock.calls).toEqual([[{ via: `trigger` }]])
 
-      dismiss(toggle)
-      await tick()
+    dismiss(toggle)
+    await tick()
 
-      expect(is_open(pane)).toBe(false)
-      expect([on_open.mock.calls.length, on_close.mock.calls]).toEqual([1, [[{ via }]]])
-    },
-  )
+    expect(is_open(pane)).toBe(false)
+    expect([on_open.mock.calls.length, on_close.mock.calls]).toEqual([1, [[{ via }]]])
+  })
 
   // dismiss_on undefined leaves the pane's own default in force, which is what pins it
   const mount_toggles = async (
-    dismiss_on?: `press` | `release`,
-    open = false,
-    callbacks: PaneProps = {},
+    props: ComponentProps<typeof TestPaneExternalToggles> = {},
   ) => {
-    render(TestPaneExternalToggles, { dismiss_on, open, ...callbacks })
+    render(TestPaneExternalToggles, props)
     await tick()
     return {
       pane: doc_query<HTMLDivElement>(`.draggable-pane`),
@@ -169,7 +164,8 @@ describe(`DraggablePane`, () => {
     `mounting with open=%s reports nothing; the bound prop reports programmatic`,
     async (initially_open) => {
       const [on_open, on_close] = [vi.fn(), vi.fn()]
-      const { pane, checkbox } = await mount_toggles(undefined, initially_open, {
+      const { pane, checkbox } = await mount_toggles({
+        open: initially_open,
         on_open,
         on_close,
       })
@@ -178,33 +174,28 @@ describe(`DraggablePane`, () => {
       await set_checked(checkbox, !initially_open)
       await set_checked(checkbox, initially_open)
       expect(is_open(pane)).toBe(initially_open)
-      const programmatic = [[{ via: `programmatic` }]]
-      expect([on_open.mock.calls, on_close.mock.calls]).toEqual([
-        programmatic,
-        programmatic,
-      ])
+      expect(on_open.mock.calls).toEqual([[{ via: `programmatic` }]])
+      expect(on_close.mock.calls).toEqual([[{ via: `programmatic` }]])
     },
   )
 
-  // each callback flips the state back once; the flip is a new change, reported in turn
+  // the first callback flips the state back once; the flip is a new change, reported in turn
   test.each([
     [`on_open closing`, true],
     [`on_close reopening`, false],
   ] as const)(`%s the pane reports the flip back`, async (_label, flip_on_open) => {
-    let flipped = false
-    const flip_back = (open: boolean) => () => {
-      if (flipped) return
-      flipped = true
-      void set_checked(doc_query<HTMLInputElement>(`input[type="checkbox"]`), open)
-    }
-    const on_open = vi.fn(flip_on_open ? flip_back(false) : undefined)
-    const on_close = vi.fn(flip_on_open ? undefined : flip_back(true))
-    const { pane } = await mount_toggles(undefined, !flip_on_open, { on_open, on_close })
+    const [on_open, on_close] = [vi.fn(), vi.fn()]
+    const [first, second] = flip_on_open ? [on_open, on_close] : [on_close, on_open]
+    const { pane, checkbox } = await mount_toggles({
+      open: !flip_on_open,
+      on_open,
+      on_close,
+    })
+    first.mockImplementationOnce(() => void set_checked(checkbox, !flip_on_open))
 
     await click(doc_query<HTMLButtonElement>(`button.pane-toggle`))
     await tick()
     expect(is_open(pane)).toBe(!flip_on_open)
-    const [first, second] = flip_on_open ? [on_open, on_close] : [on_close, on_open]
     expect([first.mock.calls, second.mock.calls]).toEqual([
       [[{ via: `trigger` }]],
       [[{ via: `programmatic` }]],
@@ -220,7 +211,7 @@ describe(`DraggablePane`, () => {
   ] as const)(
     `dismiss_on=%s, an outside checkbox bound to open reopens the pane: %s`,
     async (_label, reopens, dismiss_on) => {
-      const { pane, checkbox } = await mount_toggles(dismiss_on, true)
+      const { pane, checkbox } = await mount_toggles({ dismiss_on, open: true })
       expect(is_open(pane)).toBe(true)
 
       press(checkbox)
@@ -240,7 +231,7 @@ describe(`DraggablePane`, () => {
   ] as const)(
     `dismiss_on=%s times outside pointer gestures`,
     async (dismiss_on, stays_open_after_click, stays_open_after_press) => {
-      const { pane, trigger } = await mount_toggles(dismiss_on)
+      const { pane, trigger } = await mount_toggles({ dismiss_on })
 
       press(trigger)
       await tick()
@@ -800,17 +791,13 @@ describe(`DraggablePane`, () => {
     Reflect.set(pane_props, `role`, `region`)
     Reflect.set(pane_props, `aria-modal`, `true`)
     Reflect.set(toggle_props, `type`, `submit`)
-    // SVG attributes, so the bundled icon can be sized without a style string
     const icon_props = { width: 20, height: 20, class: `consumer-icon` }
     const { toggle, pane } = await setup({ pane_props, toggle_props, icon_props })
 
     expect(pane.id).toBe(`my-pane`)
-    const icon = toggle.querySelector(`svg`)
-    expect([icon?.getAttribute(`width`), icon?.getAttribute(`height`)]).toEqual([
-      `20`,
-      `20`,
-    ])
-    expect(icon?.classList).toContain(`consumer-icon`)
+    expect(
+      toggle.querySelector(`svg.consumer-icon[width="20"][height="20"]`),
+    ).not.toBeNull()
     // role, aria-modal, data-resize and type sit after the spread so a consumer cannot
     // clobber them into broken semantics (lost dialog role, trapped SRs, form-posting toggle)
     expect([pane.getAttribute(`role`), pane.dataset.resize]).toEqual([`dialog`, `none`])

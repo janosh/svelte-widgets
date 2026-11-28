@@ -89,11 +89,9 @@ export { default as StatGrid } from './StatGrid.svelte'
 export { default as ColumnFilter } from './table/ColumnFilter.svelte'
 export { default as ColumnPicker } from './table/ColumnPicker.svelte'
 export type {
-  ColumnFilterCloseVia,
-  ColumnFilterOpenVia,
   ColumnFilterValue,
-  ColumnPickerCloseVia,
-  ColumnPickerOpenVia,
+  ColumnPopoverCloseVia,
+  ColumnPopoverOpenVia,
   TableColumn,
 } from './table/types'
 

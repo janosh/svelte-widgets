@@ -172,12 +172,9 @@
     // opened synchronously from the same gesture.
     context_open_timeout = setTimeout(() => {
       if (disabled || all_empty) return
-      // a right-click on an open menu only moves it
-      if (at) at = point
-      else {
-        next_at = point
-        change_open(true, `contextmenu`)
-      }
+      next_at = point
+      if (at) at = point // a right-click on an open menu only moves it
+      else change_open(true, `contextmenu`)
     }, 0)
   }
 

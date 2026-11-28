@@ -5,24 +5,21 @@
   import type { ComponentProps } from 'svelte'
 
   type PaneProps = ComponentProps<typeof DraggablePane>
-  let {
-    dismiss_on,
-    open = $bindable(false),
-    on_open,
-    on_close,
-  }: {
+  // indexed, not Pick<>: svelte-check --tsgo rejects a Pick of ComponentProps
+  type Props = {
     dismiss_on?: PaneProps[`dismiss_on`]
-    open?: boolean
     on_open?: PaneProps[`on_open`]
     on_close?: PaneProps[`on_close`]
-  } = $props()
+    open?: boolean
+  }
+  let { open = $bindable(false), ...rest }: Props = $props()
   let persistent = $state(false)
 </script>
 
 <input type="checkbox" bind:checked={open} />
 <button data-testid="pointerdown-trigger" onpointerdown={() => (open = true)}>open</button
 >
-<DraggablePane bind:open bind:persistent {dismiss_on} {on_open} {on_close}>
+<DraggablePane bind:open bind:persistent {...rest}>
   {#snippet children()}
     <div data-testid="content">pane content</div>
   {/snippet}

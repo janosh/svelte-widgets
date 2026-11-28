@@ -10,7 +10,7 @@
   import Popover from '../Popover.svelte'
   import { COLUMN_PICKER_LABELS, type ColumnPickerLabels } from './labels'
   import { track_open } from '../internal/open-state.svelte.ts'
-  import type { ColumnPickerCloseVia, ColumnPickerOpenVia, TableColumn } from './types'
+  import type { ColumnPopoverCloseVia, ColumnPopoverOpenVia, TableColumn } from './types'
 
   // Show/hide menu for table columns (or any toggleable items): a trigger button opening an
   // anchored native popover of checkboxes, sectioned by `group`, searchable when long, with
@@ -54,8 +54,8 @@
     on_toggle?: (column: Col, visible: boolean) => void
     // each open/close change once, not on mount: the trigger, `dismiss` (outside click,
     // Escape, another popover opening) or `programmatic` for a bound `open` change
-    on_open?: (detail: { via: ColumnPickerOpenVia }) => void
-    on_close?: (detail: { via: ColumnPickerCloseVia }) => void
+    on_open?: (detail: { via: ColumnPopoverOpenVia }) => void
+    on_close?: (detail: { via: ColumnPopoverCloseVia }) => void
     // replaces the default icon + label; the button around it keeps owning the click
     trigger?: Snippet<[{ open: boolean; changed: boolean }]>
     // extra controls beside the search box, above the column list
@@ -66,7 +66,7 @@
     description?: Snippet<[{ column: Col }]>
   } = $props()
 
-  const change_open = track_open<ColumnPickerCloseVia>(
+  const change_open = track_open<ColumnPopoverCloseVia>(
     () => open,
     (value) => (open = value),
     (is_open, via) => {

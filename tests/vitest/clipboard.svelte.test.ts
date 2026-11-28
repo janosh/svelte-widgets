@@ -4,7 +4,7 @@ import {
   type CopyAnchor,
 } from '#lib/browser/index.ts'
 import { flushSync } from 'svelte'
-import { afterAll, beforeEach, expect, test, vi } from 'vite-plus/test'
+import { afterAll, afterEach, beforeEach, expect, test, vi } from 'vite-plus/test'
 
 // happy-dom has no navigator.clipboard, so writeText is a spy. Timers are faked to keep
 // the feedback window assertions exact rather than sleeping through them.
@@ -16,6 +16,7 @@ beforeEach(() => {
   write_text.mockResolvedValue(undefined)
   vi.useFakeTimers()
 })
+afterEach(() => vi.restoreAllMocks())
 // the stub is file-wide, so it can only go once every test is done
 afterAll(() => vi.unstubAllGlobals())
 
@@ -156,7 +157,6 @@ test.each<[string, () => CopyAnchor | undefined, [number, number], string[]]>([
     await vi.advanceTimersByTimeAsync(500)
     // stays rendered, so the next message is announced: it only empties and turns transparent
     expect(shown()).toEqual([``, `0`, true])
-    vi.restoreAllMocks()
   },
 )
 
@@ -166,11 +166,8 @@ test.each<[string, () => CopyAnchor | undefined, [number, number], string[]]>([
 test(`copy_text announces through a live region and restarts the fade`, async () => {
   live()?.remove()
   await copy_text(`a`, { labels: { success: `first` }, duration_ms: 1000 })
-  expect([toast()?.getAttribute(`aria-hidden`), live()?.getAttribute(`role`)]).toEqual([
-    `true`,
-    `status`,
-  ])
-  expect(live()?.textContent).toBe(``)
+  const roles = [toast()?.getAttribute(`aria-hidden`), live()?.getAttribute(`role`)]
+  expect([...roles, live()?.textContent]).toEqual([`true`, `status`, ``])
   await vi.advanceTimersByTimeAsync(100)
   expect(live()?.textContent).toBe(`first`)
   const cancel = vi.fn()
@@ -202,7 +199,6 @@ test(`copy_text defaults to the focus inside open shadow roots`, async () => {
     return dialog.contains(this) ? dialog : null
   })
   Object.defineProperty(shadow, `activeElement`, { value: inner, configurable: true })
-  inner.focus()
   Object.defineProperty(document, `activeElement`, {
     value: shadow_host,
     configurable: true,
@@ -213,7 +209,6 @@ test(`copy_text defaults to the focus inside open shadow roots`, async () => {
   const shadow_toast = dialog.querySelector<HTMLElement>(`.copy-toast`)
   expect(shadow_toast?.style.left).toBe(`106px`)
   Reflect.deleteProperty(document, `activeElement`)
-  vi.restoreAllMocks()
   shadow_host.remove()
 })
 
@@ -229,17 +224,12 @@ test(`copy_text resolves false and says so when the write fails`, async () => {
 // The live region stays empty until the write settles (an announced "Copied!" must be true),
 // and a slow earlier write must not overwrite a newer one
 test(`copy_text confirms only after the write, and the newest copy wins`, async () => {
-  let resolve_first = () => {}
-  write_text.mockImplementationOnce(
-    () =>
-      new Promise<void>((done) => {
-        resolve_first = done
-      }),
-  )
+  const first_write = Promise.withResolvers<undefined>()
+  write_text.mockReturnValueOnce(first_write.promise)
   const first = copy_text(`first`, { labels: { success: `first` } })
   expect([toast()?.textContent, live()?.textContent]).toEqual([``, ``])
   await copy_text(`second`, { labels: { success: `second` } })
-  resolve_first()
+  first_write.resolve(undefined)
   expect(await first).toBe(true)
   expect(toast()?.textContent).toBe(`second`)
 })
@@ -279,6 +269,5 @@ test(`copy_text hosts the toast in the modal dialog holding the anchor or focus`
     document.body,
     document.body,
   ])
-  vi.restoreAllMocks()
   dialog.remove()
 })

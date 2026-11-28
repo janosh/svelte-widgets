@@ -1,9 +1,5 @@
 import ColumnFilter from '#lib/table/ColumnFilter.svelte'
-import type {
-  ColumnFilterCloseVia,
-  ColumnFilterOpenVia,
-  ColumnFilterValue,
-} from '#lib/table/types.ts'
+import type { ColumnFilterValue } from '#lib/table/types.ts'
 import { type ComponentProps, createRawSnippet, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
 import source from '#lib/table/ColumnFilter.svelte?raw'
@@ -41,6 +37,10 @@ describe(`ColumnFilter`, () => {
   }
   const trigger = () => doc_query<HTMLButtonElement>(`.column-filter-trigger`)
   const panel = () => document.querySelector<HTMLElement>(`.column-filter-panel`)
+  const dismiss = () =>
+    panel()?.dispatchEvent(
+      Object.assign(new Event(`beforetoggle`), { newState: `closed` }),
+    )
 
   test(`numeric columns get a range whose bounds collapse to no filter when cleared`, async () => {
     const state = mount_filter([3, 1.5, 12.345], { format_bound: String })
@@ -129,40 +129,30 @@ describe(`ColumnFilter`, () => {
     expect(state.open).toBe(true)
     expect(values).toHaveBeenCalledOnce()
     expect(panel()?.getAttribute(`popover`)).toBe(`auto`)
-    panel()?.dispatchEvent(
-      Object.assign(new Event(`beforetoggle`), { newState: `closed` }),
-    )
+    dismiss()
     await tick()
     expect(state.open).toBe(false)
     expect(panel()).toBeNull()
   })
 
-  const dismiss = (node: HTMLElement | null) =>
-    node?.dispatchEvent(Object.assign(new Event(`beforetoggle`), { newState: `closed` }))
   // each cause of an open/close change, starting from the opposite state
   test.each([
-    { initial: false, via: `trigger`, act: () => click(trigger()) },
-    {
-      initial: false,
-      via: `programmatic`,
-      act: (state: { open: boolean }) => (state.open = true),
-    },
-    { initial: true, via: `trigger`, act: () => click(trigger()) },
-    {
-      initial: true,
-      via: `programmatic`,
-      act: (state: { open: boolean }) => (state.open = false),
-    },
-    { initial: true, via: `dismiss`, act: () => dismiss(panel()) },
+    { initial: false, via: `trigger` },
+    { initial: false, via: `programmatic` },
+    { initial: true, via: `trigger` },
+    { initial: true, via: `programmatic` },
+    { initial: true, via: `dismiss` },
   ] as const)(
     `open=$initial reports $via exactly once and nothing on mount`,
-    async ({ initial, via, act }) => {
+    async ({ initial, via }) => {
       const [on_open, on_close] = [vi.fn(), vi.fn()]
       const state = mount_filter([1, 2], { open: initial, on_open, on_close })
       await tick()
       expect([on_open.mock.calls, on_close.mock.calls]).toEqual([[], []])
 
-      await act(state)
+      if (via === `trigger`) await click(trigger())
+      else if (via === `dismiss`) dismiss()
+      else state.open = !initial
       await tick()
 
       expect(state.open).toBe(!initial)
@@ -177,11 +167,11 @@ describe(`ColumnFilter`, () => {
     const events: unknown[] = []
     const state = mount_filter([1, 2], {
       open: false,
-      on_open: ({ via }: { via: ColumnFilterOpenVia }) => {
+      on_open: ({ via }: { via: string }) => {
         events.push([`open`, via])
         state.open = false
       },
-      on_close: ({ via }: { via: ColumnFilterCloseVia }) => events.push([`close`, via]),
+      on_close: ({ via }: { via: string }) => events.push([`close`, via]),
     })
     await tick()
     await click(trigger())

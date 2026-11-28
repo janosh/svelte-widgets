@@ -651,19 +651,12 @@ describe(`Toc`, () => {
   })
 
   // each cause of a mobile open/close change, starting from the opposite state
+  const set_open = (open: boolean) => (props: TocProps) => (props.open = open)
   test.each([
     { initial: false, via: `trigger`, act: () => click(`aside.toc > button`) },
-    {
-      initial: false,
-      via: `programmatic`,
-      act: (props: TocProps) => (props.open = true),
-    },
+    { initial: false, via: `programmatic`, act: set_open(true) },
     { initial: true, via: `trigger`, act: () => click(`aside.toc > button`) },
-    {
-      initial: true,
-      via: `programmatic`,
-      act: (props: TocProps) => (props.open = false),
-    },
+    { initial: true, via: `programmatic`, act: set_open(false) },
     { initial: true, via: `pointer`, act: () => click(document.body) },
     { initial: true, via: `select`, act: () => click(`aside.toc > nav > ol > li`) },
     { initial: true, via: `escape`, act: () => press_key(globalThis, `Escape`) },

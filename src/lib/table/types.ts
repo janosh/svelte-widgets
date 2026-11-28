@@ -23,10 +23,8 @@ export type TableColumn = {
 // What opened or closed a ColumnPicker / ColumnFilter popover. `dismiss` is the native light
 // dismiss (an outside click, Escape, or another popover opening); `programmatic` a change
 // through the bound `open` prop.
-export type ColumnPickerOpenVia = `trigger` | `programmatic`
-export type ColumnPickerCloseVia = ColumnPickerOpenVia | `dismiss`
-export type ColumnFilterOpenVia = `trigger` | `programmatic`
-export type ColumnFilterCloseVia = ColumnFilterOpenVia | `dismiss`
+export type ColumnPopoverOpenVia = `trigger` | `programmatic`
+export type ColumnPopoverCloseVia = ColumnPopoverOpenVia | `dismiss`
 
 export type FilterKind = `numeric` | `category` | `text`
 

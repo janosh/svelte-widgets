@@ -99,12 +99,11 @@ export type CommandMenuCloseVia = CommandMenuOpenVia | `escape` | `pointer` | `s
 // menu, `programmatic` a change to the bound `open`/`at`, a `disabled` flip or hidePopover()
 export type ActionMenuOpenVia = `trigger` | `contextmenu` | `programmatic`
 export type ActionMenuCloseVia =
-  | `trigger`
+  | Exclude<ActionMenuOpenVia, `contextmenu`>
   | `escape`
   | `pointer`
   | `select`
   | `tab`
-  | `programmatic`
 
 export type PageSearchNavigateDetails = {
   query: string

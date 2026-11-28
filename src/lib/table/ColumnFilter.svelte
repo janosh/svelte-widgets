@@ -28,9 +28,9 @@
   import { COLUMN_FILTER_LABELS, type ColumnFilterLabels } from './labels'
   import { track_open } from '../internal/open-state.svelte.ts'
   import type {
-    ColumnFilterCloseVia,
-    ColumnFilterOpenVia,
     ColumnFilterValue,
+    ColumnPopoverCloseVia,
+    ColumnPopoverOpenVia,
   } from './types'
 
   // Per-column filter for a table header: a funnel button opening an anchored popover whose
@@ -79,11 +79,11 @@
     option?: Snippet<[{ value: string; checked: boolean }]>
     // each open/close change once, not on mount: the trigger, `dismiss` (outside click,
     // Escape, another popover opening) or `programmatic` for a bound `open` change
-    on_open?: (detail: { via: ColumnFilterOpenVia }) => void
-    on_close?: (detail: { via: ColumnFilterCloseVia }) => void
+    on_open?: (detail: { via: ColumnPopoverOpenVia }) => void
+    on_close?: (detail: { via: ColumnPopoverCloseVia }) => void
   } = $props()
 
-  const change_open = track_open<ColumnFilterCloseVia>(
+  const change_open = track_open<ColumnPopoverCloseVia>(
     () => open,
     (value) => (open = value),
     (is_open, via) => {

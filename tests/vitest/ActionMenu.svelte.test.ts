@@ -1,10 +1,5 @@
 import { ActionMenu } from '#lib'
-import type {
-  ActionMenuCloseVia,
-  ActionMenuOpenVia,
-  CmdAction,
-  CmdSection,
-} from '#lib/types.ts'
+import type { CmdAction, CmdSection } from '#lib/types.ts'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, flushSync, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
@@ -302,50 +297,48 @@ describe(`ActionMenu`, () => {
     const reports: [`open` | `close`, string][] = []
     return {
       reports,
-      on_open: ({ via }: { via: ActionMenuOpenVia }) => reports.push([`open`, via]),
-      on_close: ({ via }: { via: ActionMenuCloseVia }) => reports.push([`close`, via]),
+      on_open: ({ via }: { via: string }) => reports.push([`open`, via]),
+      on_close: ({ via }: { via: string }) => reports.push([`close`, via]),
     }
   }
   const custom_dismiss: MenuProps = { dismiss: { dismiss_on: `press` } }
-  // native light-dismiss is emulated by the input that precedes it, then hidePopover()
+  const on_body = (make_event: () => Event) => () =>
+    document.body.dispatchEvent(make_event())
   const hide_popover = () => doc_query(`menu`).hidePopover()
+  // native light-dismiss is emulated by the input that precedes it, then hidePopover()
+  const native_dismiss = (make_event: () => Event) => () => {
+    on_body(make_event)()
+    hide_popover()
+  }
   test.each([
     [`select`, {}, () => click(items()[0])],
     [`tab`, {}, () => press_key(doc_query(`menu`), `Tab`)],
-    [`escape`, custom_dismiss, () => document.body.dispatchEvent(escape_key())],
-    [`pointer`, custom_dismiss, () => document.body.dispatchEvent(outside_press())],
-    [`pointer`, {}, () => document.body.dispatchEvent(secondary_press())],
-    [
-      `escape`,
-      {},
-      () => {
-        document.body.dispatchEvent(escape_key())
-        hide_popover()
-      },
-    ],
-    [
-      `pointer`,
-      {},
-      () => {
-        document.body.dispatchEvent(outside_press())
-        hide_popover()
-      },
-    ],
+    [`escape`, custom_dismiss, on_body(escape_key)],
+    [`pointer`, custom_dismiss, on_body(outside_press)],
+    [`pointer`, {}, on_body(secondary_press)],
+    [`escape`, {}, native_dismiss(escape_key)],
+    [`pointer`, {}, native_dismiss(outside_press)],
     [`programmatic`, {}, hide_popover],
+    // inputs that dismiss nothing leave no stale cause for a later hidePopover()
+    [
+      `programmatic`,
+      {},
+      () => {
+        doc_query(`menu`).dispatchEvent(outside_press())
+        hide_popover()
+      },
+    ],
+    [
+      `programmatic`,
+      {},
+      native_dismiss(() => new KeyboardEvent(`keydown`, { key: `a`, bubbles: true })),
+    ],
     [
       `programmatic`,
       { disabled: false },
-      (props: MenuProps) => {
-        props.disabled = true
-      },
+      (props: MenuProps) => Object.assign(props, { disabled: true }),
     ],
-    [
-      `programmatic`,
-      {},
-      (props: MenuProps) => {
-        props.at = null
-      },
-    ],
+    [`programmatic`, {}, (props: MenuProps) => Object.assign(props, { at: null })],
   ] as const)(
     `a context menu reports via=%s once (props %j)`,
     async (via, extra, act) => {
@@ -355,7 +348,10 @@ describe(`ActionMenu`, () => {
       await flush_context_open()
       right_click(document.body, 10, 20) // moving an open menu is no new open
       await flush_context_open()
-      expect(reports).toEqual([[`open`, `contextmenu`]])
+      expect([doc_query(`menu`).style.left, reports]).toEqual([
+        `10px`,
+        [[`open`, `contextmenu`]],
+      ])
 
       await act(props)
       await tick()
@@ -403,11 +399,11 @@ describe(`ActionMenu`, () => {
     const props = $state({
       actions: make_actions(),
       open: false,
-      on_open: (detail: { via: ActionMenuOpenVia }) => {
+      on_open: (detail: { via: string }) => {
         on_open(detail)
         if (bounce) props.open = false
       },
-      on_close: (detail: { via: ActionMenuCloseVia }) => {
+      on_close: (detail: { via: string }) => {
         on_close(detail)
         if (detail.via === `select`) props.open = true
       },

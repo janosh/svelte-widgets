@@ -61,8 +61,7 @@
     toggle_props?: Omit<HTMLButtonAttributes, `aria-expanded` | `type`>
     open_icon?: IconData
     closed_icon?: IconData
-    // Attributes for the bundled icon (sizing is the common case, like ThemeToggle's);
-    // reach for `toggle` only to replace it
+    // Attributes for the bundled icon, e.g. its size; reach for `toggle` only to replace it
     icon_props?: Omit<SVGAttributes<SVGSVGElement>, `path` | `stroke` | `viewBox`>
     // Horizontal edge shared by the toggle and pane before dragging.
     align?: `start` | `end`

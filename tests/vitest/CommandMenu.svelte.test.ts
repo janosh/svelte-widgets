@@ -50,6 +50,17 @@ const shortcut_kbd_parts = () =>
 const stored_recents = (key: string): unknown =>
   JSON.parse(localStorage.getItem(key) ?? `[]`)
 
+const dialog_el = () => doc_query<HTMLDialogElement>(`dialog`)
+
+// a pointerdown at press_xy outside a stubbed dialog box at (100..300, 100..200)
+const press_backdrop = (press_xy = 10) => {
+  const dialog = dialog_el()
+  dialog.getBoundingClientRect = () =>
+    ({ left: 100, top: 100, right: 300, bottom: 200 }) as DOMRect
+  dialog.dispatchEvent(pointer_event(`pointerdown`, press_xy, press_xy))
+  return dialog
+}
+
 const press_ctrl_shift = (key: string) =>
   press_key(globalThis, key, { ctrlKey: true, shiftKey: true })
 
@@ -177,11 +188,7 @@ test.each([
     })
     mount_menu(props)
 
-    const dialog = doc_query<HTMLDialogElement>(`dialog`)
-    dialog.getBoundingClientRect = () =>
-      ({ left: 100, top: 100, right: 300, bottom: 200 }) as DOMRect
-    dialog.dispatchEvent(pointer_event(`pointerdown`, press_xy, press_xy))
-    dialog.dispatchEvent(pointer_event(`click`, 10, 10))
+    press_backdrop(press_xy).dispatchEvent(pointer_event(`click`, 10, 10))
     await tick()
 
     expect(props.open).toBe(!should_close)
@@ -191,7 +198,8 @@ test.each([
 
 test(`opens a labeled native light-dismiss modal and forwards styling props`, async () => {
   const show_modal = vi.spyOn(HTMLDialogElement.prototype, `showModal`)
-  let style_reads = 0 // each option row render reads li_option_props twice (spread, class)
+  // each option row render reads li_option_props 3 times (spread, class, title fallback)
+  let style_reads = 0
   mount_menu({
     // more rows than the two an arrow key moves between, so re-running all would show
     actions: make_actions(`a1`, `a2`, `a3`, `a4`, `a5`, `a6`),
@@ -219,8 +227,7 @@ test(`opens a labeled native light-dismiss modal and forwards styling props`, as
   expect(doc_query(`dialog div.option-list`).classList).toContain(`my-custom-class`)
   expect(menu_input().placeholder).toBe(`Custom placeholder`)
   expect(doc_query(`dialog ul.options li`).style.fontWeight).toBe(`bold`)
-  // an arrow key re-renders only the two rows whose active state flips, not every row; each
-  // reads li_option_props 3 times (attribute spread, class, title fallback)
+  // an arrow key re-renders only the two rows whose active state flips, not every row
   style_reads = 0
   key_reads.count = 0
   press_key(menu_input(), `ArrowDown`)
@@ -470,55 +477,38 @@ const track_reports = () => {
   }
 }
 
-const press_backdrop = () => {
-  const dialog = doc_query<HTMLDialogElement>(`dialog`)
-  dialog.getBoundingClientRect = () =>
-    ({ left: 100, top: 100, right: 300, bottom: 200 }) as DOMRect
-  dialog.dispatchEvent(pointer_event(`pointerdown`, 10, 10))
-  return dialog
-}
-
 // native dialog paths (Escape cancel, closedby light dismiss) are emulated by the input that
 // precedes them, then a bare dialog.close() as the browser would issue
 test.each([
-  [`shortcut`, false, {}, () => press_key(globalThis, `k`, { metaKey: true }), `open`],
-  [`escape`, true, {}, () => press_key(menu_input(), `Escape`), `close`],
+  [`shortcut`, false, {}, () => press_key(globalThis, `k`, { metaKey: true })],
+  [`escape`, true, {}, () => press_key(menu_input(), `Escape`)],
   [
     `shortcut`,
     true,
     { close_keys: [`x`] as string[] },
     () => press_key(menu_input(), `x`),
-    `close`,
   ],
   [
     `pointer`,
     true,
     {},
     () => press_backdrop().dispatchEvent(pointer_event(`click`, 10, 10)),
-    `close`,
   ],
-  [`select`, true, {}, () => press_key(menu_input(), `Enter`), `close`],
+  [`select`, true, {}, () => press_key(menu_input(), `Enter`)],
   [
     `escape`,
     true,
     { close_keys: [`q`] as string[], dialog_props: { closedby: `any` as const } },
     () => {
       press_key(globalThis, `Escape`)
-      doc_query<HTMLDialogElement>(`dialog`).close()
+      dialog_el().close()
     },
-    `close`,
   ],
-  [`pointer`, true, {}, () => press_backdrop().close(), `close`],
-  [
-    `programmatic`,
-    true,
-    {},
-    () => doc_query<HTMLDialogElement>(`dialog`).close(),
-    `close`,
-  ],
+  [`pointer`, true, {}, () => press_backdrop().close()],
+  [`programmatic`, true, {}, () => dialog_el().close()],
 ] as const)(
   `reports via=%s once (initially open: %s, props %j)`,
-  async (via, open, extra, act, kind) => {
+  async (via, open, extra, act) => {
     const { reports, on_open, on_close } = track_reports()
     mount_menu({ open, actions: mock_actions, on_open, on_close, ...extra })
     await tick()
@@ -527,7 +517,7 @@ test.each([
     act()
     await tick()
     await tick()
-    expect(reports).toEqual([[kind, via]])
+    expect(reports).toEqual([[open ? `close` : `open`, via]])
   },
 )
 
