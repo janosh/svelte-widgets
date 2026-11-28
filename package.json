@@ -342,7 +342,7 @@
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": "^26.13.1"
+      "version": "^22.18 || >=23.6"
     }
   }
 }
