@@ -6,7 +6,14 @@
   import OptionList from './internal/OptionList.svelte'
   import { create_recent_list } from './browser/index'
   import { validate_cmd_actions } from './internal/command'
-  import type { CmdAction, LoadOptionsParams, OptionListProps } from './types'
+  import { track_open } from './internal/open-state.svelte.ts'
+  import type {
+    CmdAction,
+    CommandMenuCloseVia,
+    CommandMenuOpenVia,
+    LoadOptionsParams,
+    OptionListProps,
+  } from './types'
   import type { Hotkey } from './shortcuts'
   import { create_cmd_action_filter, format_cmd_metadata } from './match'
   import { chain_handlers, clamp_integer } from './utils'
@@ -39,6 +46,8 @@
     matching_options: matching_actions = $bindable([]),
     no_matching_options_msg = `No matching commands`,
     on_execute,
+    on_open,
+    on_close,
     onkeydown,
     option: option_snippet,
     placeholder = `Type a command…`,
@@ -55,6 +64,9 @@
     actions: Action[]
     // Called after a menu selection or global shortcut invokes its action.
     on_execute?: (detail: { action: Action }) => unknown
+    // Each real change of `open` reports once, never on mount.
+    on_open?: (detail: { via: CommandMenuOpenVia }) => void
+    on_close?: (detail: { via: CommandMenuCloseVia }) => void
     triggers?: string[]
     close_keys?: string[]
     backdrop_dim?: boolean
@@ -160,17 +172,32 @@
     if (input && document.activeElement !== input) input.focus()
   })
 
-  function close_menu() {
-    open = false
+  const change_open = track_open<CommandMenuCloseVia>(
+    () => open,
+    (value) => (open = value),
+    (is_open, via) => {
+      if (is_open) on_open?.({ via: via === `shortcut` ? via : `programmatic` })
+      else on_close?.({ via })
+    },
+  )
+
+  function close_menu(via: CommandMenuCloseVia) {
+    change_open(false, via)
     active_idx = null
     active_option = null
     search_text = ``
   }
 
+  // The native dialog closes on its own for Escape and light dismiss; the last input names
+  // which, so its close event reports the right cause.
+  let native_close_via: CommandMenuCloseVia | null = null
+
   // A queued close must not shut a menu reopened since (remounted, or reshown mid-fade)
   function handle_dialog_close(event: Event) {
+    const via = native_close_via ?? `programmatic`
+    native_close_via = null
     if (open && (event.currentTarget !== dialog || dialog?.open)) return
-    close_menu()
+    close_menu(via)
   }
 
   // Cmd and Ctrl both open the menu on every platform, so `mod` is too narrow here
@@ -184,9 +211,18 @@
     close_keys.filter((key) => key !== `Escape` || effective_closedby !== `none`),
   )
   const toggle_bindings = $derived<Hotkey[]>([
-    { keys: open_shortcuts, handler: () => (open = true), disabled: open },
+    {
+      keys: open_shortcuts,
+      handler: () => change_open(true, `shortcut`),
+      disabled: open,
+    },
     // Escape has to work while the search input has focus, hence allow_in_inputs
-    { keys: close_hotkeys, handler: close_menu, disabled: !open, allow_in_inputs: true },
+    {
+      keys: close_hotkeys,
+      handler: (event) => close_menu(event.key === `Escape` ? `escape` : `shortcut`),
+      disabled: !open,
+      allow_in_inputs: true,
+    },
   ])
   // Backdrop clicks close by default even when Escape doesn't (native closedby `none`)
   const backdrop_closes = $derived((dialog_props?.closedby ?? `any`) === `any`)
@@ -210,11 +246,12 @@
   const backdrop = track_backdrop_dismiss(
     () => dialog,
     () => {
-      if (backdrop_closes && dialog?.open) close_menu()
+      if (backdrop_closes && dialog?.open) close_menu(`pointer`)
     },
   )
 
   function handle_window_keydown(event: KeyboardEvent) {
+    if (open) native_close_via = event.key === `Escape` ? `escape` : null
     // a close key still lands after another handler already called preventDefault
     if (event.defaultPrevented && !(open && close_keys.includes(event.key))) return
     run_hotkeys(event, key_bindings)
@@ -224,7 +261,7 @@
     if (action.disabled) return
     if (recent_actions)
       recent_action_ids = recent_actions.remember(action.id, recent_action_ids)
-    if (open) close_menu()
+    if (open) close_menu(`select`)
     action.action(action.label)
     on_execute?.({ action })
   }
@@ -268,7 +305,10 @@
     closedby={effective_closedby}
     onclose={chain_handlers(handle_dialog_close, dialog_props?.onclose)}
     oncancel={handle_dialog_cancel}
-    onpointerdown={chain_handlers(backdrop.onpointerdown, dialog_props?.onpointerdown)}
+    onpointerdown={chain_handlers((event: PointerEvent) => {
+      backdrop.onpointerdown(event)
+      native_close_via = backdrop.press_started ? `pointer` : null
+    }, dialog_props?.onpointerdown)}
     onpointercancel={chain_handlers(
       backdrop.onpointercancel,
       dialog_props?.onpointercancel,

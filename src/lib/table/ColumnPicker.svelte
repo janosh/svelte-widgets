@@ -9,7 +9,8 @@
   import { merge_defaults } from '../labels'
   import Popover from '../Popover.svelte'
   import { COLUMN_PICKER_LABELS, type ColumnPickerLabels } from './labels'
-  import type { TableColumn } from './types'
+  import { track_open } from '../internal/open-state.svelte.ts'
+  import type { ColumnPickerCloseVia, ColumnPickerOpenVia, TableColumn } from './types'
 
   // Show/hide menu for table columns (or any toggleable items): a trigger button opening an
   // anchored native popover of checkboxes, sectioned by `group`, searchable when long, with
@@ -26,6 +27,8 @@
     search_text = (col: Col) =>
       [col.id, col.label, col.description, col.group].filter(Boolean).join(` `),
     on_toggle,
+    on_open,
+    on_close,
     trigger,
     header,
     toggle_label,
@@ -49,6 +52,10 @@
     search_text?: (column: Col) => string
     // every visibility change, resets included, for hosts tracking it outside `visible`
     on_toggle?: (column: Col, visible: boolean) => void
+    // each open/close change once, not on mount: the trigger, `dismiss` (outside click,
+    // Escape, another popover opening) or `programmatic` for a bound `open` change
+    on_open?: (detail: { via: ColumnPickerOpenVia }) => void
+    on_close?: (detail: { via: ColumnPickerCloseVia }) => void
     // replaces the default icon + label; the button around it keeps owning the click
     trigger?: Snippet<[{ open: boolean; changed: boolean }]>
     // extra controls beside the search box, above the column list
@@ -58,6 +65,16 @@
     // hover-popover content for columns with a `description`; defaults to the text
     description?: Snippet<[{ column: Col }]>
   } = $props()
+
+  const change_open = track_open<ColumnPickerCloseVia>(
+    () => open,
+    (value) => (open = value),
+    (is_open, via) => {
+      // only the trigger and a bound `open` change can open it
+      if (is_open) on_open?.({ via: via === `trigger` ? via : `programmatic` })
+      else on_close?.({ via })
+    },
+  )
 
   const msg = $derived(merge_defaults(COLUMN_PICKER_LABELS, labels))
   let query = $state(``)
@@ -181,7 +198,7 @@ overflow and stacking contexts, and the browser owns light dismiss and Escape --
     class={[`trigger`, { custom: Boolean(trigger) }]}
     aria-expanded={open}
     aria-label={trigger ? msg.trigger : undefined}
-    onclick={() => (open = !open)}
+    onclick={() => change_open(!open, `trigger`)}
   >
     {#if trigger}
       {@render trigger({ open, changed: has_any_changes })}
@@ -199,7 +216,10 @@ overflow and stacking contexts, and the browser owns light dismiss and Escape --
       role="group"
       aria-label={msg.trigger}
       out:close_before_removal
-      {@attach anchored_popover({ anchor: trigger_el, on_close: () => (open = false) })}
+      {@attach anchored_popover({
+        anchor: trigger_el,
+        on_close: () => change_open(false, `dismiss`),
+      })}
     >
       {#if header || show_search}
         <div class="menu-header">

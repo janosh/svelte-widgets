@@ -26,7 +26,12 @@
     type FilterPanelOptions,
   } from './filter'
   import { COLUMN_FILTER_LABELS, type ColumnFilterLabels } from './labels'
-  import type { ColumnFilterValue } from './types'
+  import { track_open } from '../internal/open-state.svelte.ts'
+  import type {
+    ColumnFilterCloseVia,
+    ColumnFilterOpenVia,
+    ColumnFilterValue,
+  } from './types'
 
   // Per-column filter for a table header: a funnel button opening an anchored popover whose
   // control depends on the column's data, a min/max range for numbers, a checklist for few
@@ -51,6 +56,8 @@
     labels,
     trigger,
     option,
+    on_open,
+    on_close,
     ...rest
   }: Omit<HTMLAttributes<HTMLSpanElement>, `children` | StoppedEvents> & {
     filter?: ColumnFilterValue
@@ -70,7 +77,21 @@
     trigger?: Snippet<[{ open: boolean; active: boolean }]>
     // a checklist entry's text
     option?: Snippet<[{ value: string; checked: boolean }]>
+    // each open/close change once, not on mount: the trigger, `dismiss` (outside click,
+    // Escape, another popover opening) or `programmatic` for a bound `open` change
+    on_open?: (detail: { via: ColumnFilterOpenVia }) => void
+    on_close?: (detail: { via: ColumnFilterCloseVia }) => void
   } = $props()
+
+  const change_open = track_open<ColumnFilterCloseVia>(
+    () => open,
+    (value) => (open = value),
+    (is_open, via) => {
+      // only the trigger and a bound `open` change can open it
+      if (is_open) on_open?.({ via: via === `trigger` ? via : `programmatic` })
+      else on_close?.({ via })
+    },
+  )
 
   const msg = $derived(merge_defaults(COLUMN_FILTER_LABELS, labels))
   // Lazy: the distinct-value scan is O(rows) and only runs for the open panel
@@ -99,7 +120,7 @@
     class={[`column-filter-trigger`, { active: Boolean(filter) }]}
     aria-label={msg.trigger(column)}
     aria-expanded={open}
-    onclick={() => (open = !open)}
+    onclick={() => change_open(!open, `trigger`)}
   >
     {#if trigger}
       {@render trigger({ open, active: Boolean(filter) })}
@@ -111,7 +132,10 @@
     <div
       class="column-filter-panel"
       out:close_before_removal
-      {@attach anchored_popover({ anchor: trigger_el, on_close: () => (open = false) })}
+      {@attach anchored_popover({
+        anchor: trigger_el,
+        on_close: () => change_open(false, `dismiss`),
+      })}
     >
       {#if panel.kind === `numeric`}
         {@const range = filter?.kind === `numeric` ? filter : undefined}

@@ -48,6 +48,8 @@ Use it for anything that hangs off a control in the corner of a widget — expor
 </div>
 ```
 
+`on_open` and `on_close` report each change once with its cause: `trigger` (the toggle), `close` (the close button), `pointer`, `escape`, or `programmatic` for a change to the bound `open`. Mounting reports nothing.
+
 The `children` snippet receives `{ open, show_controls, has_been_dragged, dragging }`, so content can react to the pane's own chrome — pausing an animation while the pane is being dragged over it, for instance.
 
 The pane carries `toc-exclude`, so headings in its content stay out of a page's [`Toc`](toc) — a pane is floating chrome, not page structure.

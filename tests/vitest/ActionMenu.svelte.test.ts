@@ -1,5 +1,10 @@
 import { ActionMenu } from '#lib'
-import type { CmdAction, CmdSection } from '#lib/types.ts'
+import type {
+  ActionMenuCloseVia,
+  ActionMenuOpenVia,
+  CmdAction,
+  CmdSection,
+} from '#lib/types.ts'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, flushSync, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
@@ -290,6 +295,146 @@ describe(`ActionMenu`, () => {
     await tick()
     expect(menu()).toBeNull()
     if (`open` in props) expect(props.open).toBe(false) // bind:open hears the close
+  })
+
+  // records open/close reports in order, so a test sees each change exactly once
+  const track_reports = () => {
+    const reports: [`open` | `close`, string][] = []
+    return {
+      reports,
+      on_open: ({ via }: { via: ActionMenuOpenVia }) => reports.push([`open`, via]),
+      on_close: ({ via }: { via: ActionMenuCloseVia }) => reports.push([`close`, via]),
+    }
+  }
+  const custom_dismiss: MenuProps = { dismiss: { dismiss_on: `press` } }
+  // native light-dismiss is emulated by the input that precedes it, then hidePopover()
+  const hide_popover = () => doc_query(`menu`).hidePopover()
+  test.each([
+    [`select`, {}, () => click(items()[0])],
+    [`tab`, {}, () => press_key(doc_query(`menu`), `Tab`)],
+    [`escape`, custom_dismiss, () => document.body.dispatchEvent(escape_key())],
+    [`pointer`, custom_dismiss, () => document.body.dispatchEvent(outside_press())],
+    [`pointer`, {}, () => document.body.dispatchEvent(secondary_press())],
+    [
+      `escape`,
+      {},
+      () => {
+        document.body.dispatchEvent(escape_key())
+        hide_popover()
+      },
+    ],
+    [
+      `pointer`,
+      {},
+      () => {
+        document.body.dispatchEvent(outside_press())
+        hide_popover()
+      },
+    ],
+    [`programmatic`, {}, hide_popover],
+    [
+      `programmatic`,
+      { disabled: false },
+      (props: MenuProps) => {
+        props.disabled = true
+      },
+    ],
+    [
+      `programmatic`,
+      {},
+      (props: MenuProps) => {
+        props.at = null
+      },
+    ],
+  ] as const)(
+    `a context menu reports via=%s once (props %j)`,
+    async (via, extra, act) => {
+      const { reports, on_open, on_close } = track_reports()
+      const props = mount_menu(make_actions(), { ...extra, on_open, on_close })
+      right_click(document.body)
+      await flush_context_open()
+      right_click(document.body, 10, 20) // moving an open menu is no new open
+      await flush_context_open()
+      expect(reports).toEqual([[`open`, `contextmenu`]])
+
+      await act(props)
+      await tick()
+      expect(menu()).toBeNull()
+      expect(reports).toEqual([
+        [`open`, `contextmenu`],
+        [`close`, via],
+      ])
+    },
+  )
+
+  test.each([false, true])(
+    `mounting reports nothing, a bound change reports programmatic (initially open: %s)`,
+    async (initially_open) => {
+      const { reports, on_open, on_close } = track_reports()
+      const context = mount_menu(make_actions(), {
+        at: initially_open ? { x: 1, y: 2 } : null,
+        on_open,
+        on_close,
+      })
+      const dropdown = $state({
+        actions: make_actions(),
+        open: initially_open,
+        on_open,
+        on_close,
+      })
+      render(TestActionMenu, dropdown)
+      await tick()
+      expect(reports).toEqual([])
+
+      context.at = initially_open ? null : { x: 3, y: 4 }
+      dropdown.open = !initially_open
+      await tick()
+      const kind = initially_open ? `close` : `open`
+      expect(reports).toEqual([
+        [kind, `programmatic`],
+        [kind, `programmatic`],
+      ])
+    },
+  )
+
+  test(`the trigger reports both ways, and a callback flipping the state back reports too`, async () => {
+    const { reports, on_open, on_close } = track_reports()
+    let bounce = true
+    const props = $state({
+      actions: make_actions(),
+      open: false,
+      on_open: (detail: { via: ActionMenuOpenVia }) => {
+        on_open(detail)
+        if (bounce) props.open = false
+      },
+      on_close: (detail: { via: ActionMenuCloseVia }) => {
+        on_close(detail)
+        if (detail.via === `select`) props.open = true
+      },
+    })
+    render(TestActionMenu, props)
+    const trigger = doc_query<HTMLButtonElement>(`[data-testid="action-menu-trigger"]`)
+
+    await click(trigger) // on_open closes it again
+    await tick()
+    expect(props.open).toBe(false)
+    bounce = false
+    await click(trigger)
+    await click(trigger)
+    await click(trigger)
+    await click(items()[0]) // on_close reopens it
+    await tick()
+
+    expect(props.open).toBe(true)
+    expect(reports).toEqual([
+      [`open`, `trigger`],
+      [`close`, `programmatic`],
+      [`open`, `trigger`],
+      [`close`, `trigger`],
+      [`open`, `trigger`],
+      [`close`, `select`],
+      [`open`, `programmatic`],
+    ])
   })
 
   describe(`sections`, () => {

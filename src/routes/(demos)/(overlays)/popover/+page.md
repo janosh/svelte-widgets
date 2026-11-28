@@ -55,6 +55,8 @@ The `trigger` snippet receives the click handler and `aria-expanded`/`aria-haspo
 </div>
 ```
 
+`on_open` and `on_close` report each change once with its cause: `trigger` (a click, or a hover/focus enter or leave), `pointer`, `escape`, or `programmatic` for a change to the bound `open`. Mounting reports nothing.
+
 `escape={false}` switches to a manual popover so Escape remains with the page, `dismiss_on="press"` opts into press-time custom dismissal, and `trap_focus={false}` leaves focus where it is. `strategy="absolute"` survives a transformed ancestor at the cost of tracking page scroll, and `match_width` sizes the surface to the trigger for dropdown-like menus. Set `role` to `listbox`, `tree` or `grid` when appropriate; the trigger mirrors it in `aria-haspopup` and only sets `aria-controls` while the surface is mounted. Use `ActionMenu` rather than `role="menu"` when you need complete ARIA menu keyboard behavior.
 
 Use `trigger_mode="hover"` or `trigger_mode="focus"` for non-click interactions. Hover mode also opens on focus, and `open_delay_ms`/`close_delay_ms` keep the surface stable while the pointer crosses from its trigger. Non-click modes default to a 150 ms close delay.
@@ -111,7 +113,7 @@ Render a `trigger` snippet for a button-anchored dropdown, or pass a region as c
 </ol>
 ```
 
-Use `on_execute={({ action, section }) => ...}` to observe completed action invocation, matching CommandMenu’s `on_execute({ action })`. The `item` snippet and callback preserve your custom action fields. Import `CmdSection<Action>` from the package root for typed sections.
+Use `on_execute={({ action, section }) => ...}` to observe completed action invocation, matching CommandMenu’s `on_execute({ action })`. The `item` snippet and callback preserve your custom action fields. Import `CmdSection<Action>` from the package root for typed sections. `on_open({ via })` (`trigger`, `contextmenu`, `programmatic`) and `on_close({ via })` (`trigger`, `escape`, `pointer`, `select`, `tab`, `programmatic`) report each change of `open`, or of `at` in context mode, once; mounting reports nothing.
 
 Both forms share the same menu semantics: Arrow keys walk the items (skipping disabled ones and wrapping at both ends), Home and End jump to either end, Tab/Shift+Tab close and continue after/before the trigger, and the browser closes on Escape or an outside interaction. The trigger form supports `bind:open`, `placement`, `align`, `offset`, `padding`, `match_width` and `strategy`.
 

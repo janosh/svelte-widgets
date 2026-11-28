@@ -1,5 +1,9 @@
 import ColumnFilter from '#lib/table/ColumnFilter.svelte'
-import type { ColumnFilterValue } from '#lib/table/types.ts'
+import type {
+  ColumnFilterCloseVia,
+  ColumnFilterOpenVia,
+  ColumnFilterValue,
+} from '#lib/table/types.ts'
 import { type ComponentProps, createRawSnippet, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
 import source from '#lib/table/ColumnFilter.svelte?raw'
@@ -131,6 +135,62 @@ describe(`ColumnFilter`, () => {
     await tick()
     expect(state.open).toBe(false)
     expect(panel()).toBeNull()
+  })
+
+  const dismiss = (node: HTMLElement | null) =>
+    node?.dispatchEvent(Object.assign(new Event(`beforetoggle`), { newState: `closed` }))
+  // each cause of an open/close change, starting from the opposite state
+  test.each([
+    { initial: false, via: `trigger`, act: () => click(trigger()) },
+    {
+      initial: false,
+      via: `programmatic`,
+      act: (state: { open: boolean }) => (state.open = true),
+    },
+    { initial: true, via: `trigger`, act: () => click(trigger()) },
+    {
+      initial: true,
+      via: `programmatic`,
+      act: (state: { open: boolean }) => (state.open = false),
+    },
+    { initial: true, via: `dismiss`, act: () => dismiss(panel()) },
+  ] as const)(
+    `open=$initial reports $via exactly once and nothing on mount`,
+    async ({ initial, via, act }) => {
+      const [on_open, on_close] = [vi.fn(), vi.fn()]
+      const state = mount_filter([1, 2], { open: initial, on_open, on_close })
+      await tick()
+      expect([on_open.mock.calls, on_close.mock.calls]).toEqual([[], []])
+
+      await act(state)
+      await tick()
+
+      expect(state.open).toBe(!initial)
+      expect(panel() === null).toBe(initial)
+      const [fired, silent] = initial ? [on_close, on_open] : [on_open, on_close]
+      expect(fired).toHaveBeenCalledExactlyOnceWith({ via })
+      expect(silent).not.toHaveBeenCalled()
+    },
+  )
+
+  test(`an on_open that closes the panel again still reports the close`, async () => {
+    const events: unknown[] = []
+    const state = mount_filter([1, 2], {
+      open: false,
+      on_open: ({ via }: { via: ColumnFilterOpenVia }) => {
+        events.push([`open`, via])
+        state.open = false
+      },
+      on_close: ({ via }: { via: ColumnFilterCloseVia }) => events.push([`close`, via]),
+    })
+    await tick()
+    await click(trigger())
+    await tick()
+    expect(events).toEqual([
+      [`open`, `trigger`],
+      [`close`, `programmatic`],
+    ])
+    expect(state.open).toBe(false)
   })
 
   test(`replaces the funnel through the trigger snippet and forwards root attributes`, async () => {

@@ -88,6 +88,13 @@ export { default as StatGrid } from './StatGrid.svelte'
 
 export { default as ColumnFilter } from './table/ColumnFilter.svelte'
 export { default as ColumnPicker } from './table/ColumnPicker.svelte'
-export type { ColumnFilterValue, TableColumn } from './table/types'
+export type {
+  ColumnFilterCloseVia,
+  ColumnFilterOpenVia,
+  ColumnFilterValue,
+  ColumnPickerCloseVia,
+  ColumnPickerOpenVia,
+  TableColumn,
+} from './table/types'
 
 export type { CodeToken, CodeHighlight, CodeHighlighter } from './code-block'

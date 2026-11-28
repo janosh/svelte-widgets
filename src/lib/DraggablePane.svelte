@@ -10,7 +10,8 @@
     DRAGGABLE_PANE_LABELS,
     type DraggablePaneLabels,
   } from './labels'
-  import type { DraggablePaneCloseVia } from './types'
+  import type { DraggablePaneCloseVia, DraggablePaneOpenVia } from './types'
+  import { track_open } from './internal/open-state.svelte.ts'
   import { chain_handlers } from './utils'
 
   // Handed to both snippets so they can react to pane chrome, e.g. a plot pausing its
@@ -40,6 +41,7 @@
     inside = [],
     resize = `none`,
     position = `absolute`,
+    on_open,
     on_close,
     on_drag_start,
     toggle_btn = $bindable(null),
@@ -74,6 +76,7 @@
     resize?: `both` | `width` | `height` | `none`
     // `fixed` escapes overflow-clipping ancestors; height capped to space below top edge
     position?: `absolute` | `fixed`
+    on_open?: (detail: { via: DraggablePaneOpenVia }) => void
     on_close?: (detail: { via: DraggablePaneCloseVia }) => void
     on_drag_start?: () => void
     toggle_btn?: HTMLButtonElement | null
@@ -121,13 +124,20 @@
   const gutter = (edge: `right` | `bottom`) =>
     resize_edges.includes(edge) ? `${resize_gutter_px}px` : null
 
+  const change_open = track_open<DraggablePaneCloseVia>(
+    () => open,
+    (value) => (open = value),
+    (is_open, via) => {
+      if (is_open) on_open?.({ via: via === `trigger` ? via : `programmatic` })
+      else on_close?.({ via })
+    },
+  )
   const close_pane = (via: DraggablePaneCloseVia) => {
     // display: none drops focus on the body; hand it back to the toggle instead
     if (pane?.contains(document.activeElement)) toggle_btn?.focus()
-    open = false
-    on_close?.({ via })
+    change_open(false, via)
   }
-  const toggle_pane = () => (open ? close_pane(`trigger`) : (open = true))
+  const toggle_pane = () => (open ? close_pane(`trigger`) : change_open(true, `trigger`))
 
   const clamp_to_viewport = (value: number, upper: number) =>
     Math.max(viewport_margin_px, Math.min(value, upper))

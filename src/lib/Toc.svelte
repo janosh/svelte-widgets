@@ -9,6 +9,7 @@
   import { is_editable_event_target, is_modified_click } from './shortcuts'
   import { override_style } from './attachments/shared'
   import { fragment_href } from './heading-anchors'
+  import { track_open } from './internal/open-state.svelte.ts'
 
   let {
     active_heading = $bindable(null),
@@ -148,8 +149,6 @@
   let scroll_target_timeout: ReturnType<typeof setTimeout> | undefined
   // Infinity so the first scroll event always passes the "distance increasing" check
   let prev_scroll_target_distance = Infinity
-  // seeded with the initial state so mounting reports nothing
-  let last_reported_open = untrack(() => open)
   let discovered_items: TocHeadingData[] = $state([])
   // rows are keyed by id and `#id` only reaches the first match, so keep each id's first entry
   function first_per_id<T extends { id: string }>(entries: Iterable<T>): T[] {
@@ -174,17 +173,15 @@
     prev_scroll_target_distance = Infinity
   }
 
-  type OpenChange = { open: true; via: TocOpenVia } | { open: false; via: TocCloseVia }
-  function set_open(change: OpenChange) {
-    if (last_reported_open === change.open) return
-    last_reported_open = change.open
-    open = change.open
-    if (change.open) on_open?.({ via: change.via, desktop })
-    else on_close?.({ via: change.via, desktop })
-  }
-  // the toggle button and a bound `open` change can go either way
-  const toggle_change = (value: boolean, via: TocOpenVia): OpenChange =>
-    value ? { open: true, via } : { open: false, via }
+  const change_open = track_open<TocCloseVia>(
+    () => open,
+    (value) => (open = value),
+    (is_open, via) => {
+      // only the toggle and a bound `open` change can open the ToC
+      if (is_open) on_open?.({ via: via === `trigger` ? via : `programmatic`, desktop })
+      else on_close?.({ via, desktop })
+    },
+  )
 
   type LiEvent = (MouseEvent | KeyboardEvent) & {
     currentTarget: EventTarget & HTMLLIElement
@@ -244,18 +241,13 @@
     desktop = window_width > breakpoint
   })
   $effect(() => {
-    const change = toggle_change(open, `programmatic`)
-    untrack(() => set_open(change))
-  })
-
-  $effect(() => {
     void headings // heading changes can move the aside; check_toc_overlap reads the rest
     check_toc_overlap()
   })
 
   const close = (event: MouseEvent) => {
     if (!(event.target instanceof Node) || !aside?.contains(event.target)) {
-      set_open({ open: false, via: `pointer` })
+      change_open(false, `pointer`)
     }
   }
 
@@ -604,7 +596,7 @@
         if (temporary) anchor.remove()
       }
     }
-    set_open({ open: false, via: `select` })
+    change_open(false, `select`)
   }
 
   function scroll_to_active_toc_item(behavior: `auto` | `smooth` | `instant` = `smooth`) {
@@ -632,7 +624,7 @@
     if (!react_to_keys || !react_to_keys.includes(event.key)) return
 
     const toc_has_focus = nav?.contains(document.activeElement)
-    const is_open = last_reported_open
+    const is_open = open
 
     if (
       // ignore keyboard events when ToC is closed on mobile or inactive on desktop. :hover
@@ -647,7 +639,7 @@
     if (event.key !== `Escape` && document.activeElement?.closest(`[data-toc-footer]`))
       return
     if (event.key === `Tab`) {
-      if (toc_has_focus) set_open({ open: false, via: `tab` })
+      if (toc_has_focus) change_open(false, `tab`)
       return
     }
     const focused = document.activeElement
@@ -662,7 +654,7 @@
       // nothing to close on desktop, so leave the key to e.g. an open dialog
       if (!is_open) return
       event.preventDefault()
-      set_open({ open: false, via: `escape` })
+      change_open(false, `escape`)
       return
     }
     // Navigation must not consume keys owned by outside controls; Escape/Tab are handled above.
@@ -751,7 +743,7 @@
         if (event.defaultPrevented) return
         event.stopPropagation()
         event.preventDefault()
-        set_open(toggle_change(!open, `trigger`))
+        change_open(!open, `trigger`)
       }}
       type="button"
       aria-expanded={open}

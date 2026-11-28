@@ -93,10 +93,10 @@ describe(`Popover`, () => {
     expect(doc_query(`.popover`).style.top).toBe(`58px`) // 50 + 8
   })
 
-  test(`native dismissals report their reason`, async () => {
-    const on_close = vi.fn()
+  test(`trigger opens and native dismissals report their reason`, async () => {
+    const [on_open, on_close] = [vi.fn(), vi.fn()]
     const added = vi.spyOn(document, `addEventListener`)
-    mount_popover({ on_close })
+    mount_popover({ on_open, on_close })
     // closed popovers register no document-wide close trackers; those carry an abort
     // signal, unlike the delegated listeners Svelte adds for every component loaded so far
     const has_signal = (options: unknown) =>
@@ -114,8 +114,60 @@ describe(`Popover`, () => {
 
     expect(surface()).toBeNull()
     expect(on_close).toHaveBeenLastCalledWith({ via: `pointer` })
+    expect(on_open.mock.calls).toEqual([[{ via: `trigger` }], [{ via: `trigger` }]])
     // the trap handed the keyboard back to where it came from
     expect(document.activeElement).toBe(trigger())
+
+    await click_trigger()
+    await click_trigger()
+    expect(on_close).toHaveBeenLastCalledWith({ via: `trigger` })
+    expect([on_open.mock.calls.length, on_close.mock.calls.length]).toEqual([3, 3])
+  })
+
+  test.each([false, true])(
+    `mounting with open=%s reports nothing; the bound prop reports programmatic`,
+    async (initially_open) => {
+      const [on_open, on_close] = [vi.fn(), vi.fn()]
+      const props = mount_popover({ open: initially_open, on_open, on_close })
+      await tick()
+      expect([on_open.mock.calls, on_close.mock.calls]).toEqual([[], []])
+
+      props.open = !initially_open
+      await tick()
+      props.open = initially_open
+      await tick()
+      expect(Boolean(surface())).toBe(initially_open)
+      const programmatic = [[{ via: `programmatic` }]]
+      expect([on_open.mock.calls, on_close.mock.calls]).toEqual([
+        programmatic,
+        programmatic,
+      ])
+    },
+  )
+
+  // each callback flips the state back once; the flip is a new change, reported in turn
+  test.each([
+    [`on_open closing`, true],
+    [`on_close reopening`, false],
+  ] as const)(`%s the popover reports the flip back`, async (_label, flip_on_open) => {
+    let flipped = false
+    const flip_back = (open: boolean) => () => {
+      if (flipped) return
+      flipped = true
+      props.open = open
+    }
+    const on_open = vi.fn(flip_on_open ? flip_back(false) : undefined)
+    const on_close = vi.fn(flip_on_open ? undefined : flip_back(true))
+    const props = mount_popover({ open: !flip_on_open, on_open, on_close })
+
+    await click_trigger()
+    await tick()
+    expect([props.open, Boolean(surface())]).toEqual([!flip_on_open, !flip_on_open])
+    const [first, second] = flip_on_open ? [on_open, on_close] : [on_close, on_open]
+    expect([first.mock.calls, second.mock.calls]).toEqual([
+      [[{ via: `trigger` }]],
+      [[{ via: `programmatic` }]],
+    ])
   })
 
   test(`dismiss_on: 'press' uses a manual popover and closes on pointerdown`, async () => {
@@ -140,8 +192,8 @@ describe(`Popover`, () => {
   })
 
   test(`hover honors delays and stays open across the trigger-surface gap`, async () => {
-    const on_close = vi.fn()
-    mount_popover({ trigger_mode: `hover`, open_delay_ms: 40, on_close })
+    const [on_open, on_close] = [vi.fn(), vi.fn()]
+    mount_popover({ trigger_mode: `hover`, open_delay_ms: 40, on_open, on_close })
 
     mouse_enter()
     await advance_time(39)
@@ -162,7 +214,10 @@ describe(`Popover`, () => {
     expect(surface()).toBe(dialog)
     await advance_time(1)
     expect(surface()).toBeNull()
-    expect(on_close.mock.calls).toEqual([[{ via: `trigger` }]])
+    expect([on_open.mock.calls, on_close.mock.calls]).toEqual([
+      [[{ via: `trigger` }]],
+      [[{ via: `trigger` }]],
+    ])
   })
 
   test.each([`hover`, `focus`] as const)(

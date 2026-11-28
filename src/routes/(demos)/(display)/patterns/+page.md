@@ -83,7 +83,7 @@ The bar can sit inside `root`, as here: its own status text and controls are nev
 
 ## Dialog
 
-`Dialog` is a centered native modal with bindable state and surface, composable trigger/header/footer snippets, focus restoration and nested-dialog stacking. `on_close` reports `pointer`, `escape` or `close` for dismissals started inside the dialog; it does not fire when you set the bound `open` state to `false` yourself. Use `closedby="any"` (the default) for backdrop and Escape dismissal, `closedby="closerequest"` for Escape only, or `closedby="none"` to require an explicit close action. Keep nested dialogs and other overlays inside its content so the browser's modal top layer can make only the innermost one interactive.
+`Dialog` is a centered native modal with bindable state and surface, composable trigger/header/footer snippets, focus restoration and nested-dialog stacking. `on_open` reports `trigger` or `programmatic` and `on_close` reports `pointer`, `escape`, `close` or `programmatic`: each change fires once, setting the bound `open` yourself reports `programmatic`, and mounting reports nothing. Use `closedby="any"` (the default) for backdrop and Escape dismissal, `closedby="closerequest"` for Escape only, or `closedby="none"` to require an explicit close action. Keep nested dialogs and other overlays inside its content so the browser's modal top layer can make only the innermost one interactive.
 
 ```svelte example id="patterns-dialog"
 <script lang="ts">
@@ -132,7 +132,7 @@ The bar can sit inside `root`, as here: its own status text and controls are nev
 
 ## Sheet
 
-`Sheet` composes `Dialog` as a side-positioned variant, so it shares the same snippets, close policies, focus restoration and nested-modal behavior. Keep overlays inside its dialog; portalling them to `body` moves them outside the modal subtree and makes them inert.
+`Sheet` composes `Dialog` as a side-positioned variant, so it shares the same snippets, close policies, `on_open`/`on_close` callbacks, focus restoration and nested-modal behavior. Keep overlays inside its dialog; portalling them to `body` moves them outside the modal subtree and makes them inert.
 
 ```svelte example id="patterns-sheet"
 <script lang="ts">

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ChevronDown } from './icons'
-  import { tick, untrack, type Snippet } from 'svelte'
+  import { tick, type Snippet } from 'svelte'
   import type {
     HTMLAnchorAttributes,
     HTMLAttributes,
@@ -14,6 +14,7 @@
     tooltip,
   } from './attachments/index'
   import Icon from './Icon.svelte'
+  import { track_open } from './internal/open-state.svelte.ts'
   import { create_key_selector } from './internal/key-selector.svelte.ts'
   import { merge_defaults, NAV_LABELS, type NavLabels } from './labels'
   import type { NavCloseVia, NavGroup, NavLink, NavOpenVia, NavRoute } from './types'
@@ -94,30 +95,23 @@
   const is_mobile = $derived(viewport_width <= breakpoint)
   const unique_id = $props.id()
   const panel_id = `nav-menu-${unique_id}`
-  // Plain bookkeeping avoids retriggering the observer when it records the new state. Seeded
-  // with the initial `open` so mounting open reports nothing, like Toc.
-  let was_open = untrack(() => open)
-  // what the next open change came from; a change with none set came through the bound prop
-  let pending_via: NavCloseVia | null = null
-  $effect(() => {
-    const via = pending_via ?? `programmatic`
-    pending_via = null
-    if (open === was_open) return
-    // recorded before the callbacks, so one that flips `open` back is seen as a new change
-    was_open = open
-    if (open) on_open?.({ via: via === `trigger` ? via : `programmatic` })
-    else {
-      open_dropdown = null
-      on_close?.({ via })
-    }
-  })
+  const change_open = track_open<NavCloseVia>(
+    () => open,
+    (value) => (open = value),
+    (is_open, via) => {
+      if (is_open) on_open?.({ via: via === `trigger` ? via : `programmatic` })
+      else {
+        open_dropdown = null
+        on_close?.({ via })
+      }
+    },
+  )
   $effect(() => {
     if (open_dropdown && !checked_routes.includes(open_dropdown)) open_dropdown = null
   })
 
   function close_menus(via: NavCloseVia) {
-    if (open) pending_via = via
-    open = false
+    change_open(false, via)
     open_dropdown = null
   }
 
@@ -303,10 +297,7 @@
     aria-expanded={open}
     aria-controls={panel_id}
     class={[`burger`, burger_props?.class]}
-    onclick={chain_handlers(() => {
-      pending_via = `trigger`
-      open = !open
-    }, burger_props?.onclick)}
+    onclick={chain_handlers(() => change_open(!open, `trigger`), burger_props?.onclick)}
   >
     <span aria-hidden="true"></span>
     <span aria-hidden="true"></span>

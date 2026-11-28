@@ -1,6 +1,10 @@
 import ColumnPicker from '#lib/table/ColumnPicker.svelte'
 import { ChevronDown, ChevronRight } from '#lib/icons.ts'
-import type { TableColumn } from '#lib/table/types.ts'
+import type {
+  ColumnPickerCloseVia,
+  ColumnPickerOpenVia,
+  TableColumn,
+} from '#lib/table/types.ts'
 import { type ComponentProps, createRawSnippet, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
 import { click, doc_query, fire_input, raw_snippet, render } from './index'
@@ -134,6 +138,68 @@ describe(`ColumnPicker`, () => {
         Object.assign(new Event(`beforetoggle`), { newState: `closed` }),
       )
       await tick()
+      expect(menu()).toBeNull()
+    })
+
+    // each cause of an open/close change, starting from the opposite state
+    const menu = () => document.querySelector<HTMLElement>(`.column-menu`)
+    test.each([
+      { initial: false, via: `trigger`, act: () => click(get_trigger()) },
+      { initial: false, via: `programmatic`, act: (props: Props) => (props.open = true) },
+      { initial: true, via: `trigger`, act: () => click(get_trigger()) },
+      { initial: true, via: `programmatic`, act: (props: Props) => (props.open = false) },
+      {
+        initial: true,
+        via: `dismiss`,
+        act: () =>
+          menu()?.dispatchEvent(
+            Object.assign(new Event(`beforetoggle`), { newState: `closed` }),
+          ),
+      },
+    ] as const)(
+      `open=$initial reports $via exactly once and nothing on mount`,
+      async ({ initial, via, act }) => {
+        const [on_open, on_close] = [vi.fn(), vi.fn()]
+        const props = $state<Props>({
+          columns: make_columns(),
+          open: initial,
+          on_open,
+          on_close,
+        })
+        render(ColumnPicker, props)
+        await tick()
+        expect([on_open.mock.calls, on_close.mock.calls]).toEqual([[], []])
+
+        await act(props)
+        await tick()
+
+        expect(props.open).toBe(!initial)
+        expect(menu() === null).toBe(initial)
+        const [fired, silent] = initial ? [on_close, on_open] : [on_open, on_close]
+        expect(fired).toHaveBeenCalledExactlyOnceWith({ via })
+        expect(silent).not.toHaveBeenCalled()
+      },
+    )
+
+    test(`an on_open that closes the menu again still reports the close`, async () => {
+      const events: unknown[] = []
+      const props: Props = $state({
+        columns: make_columns(),
+        open: false,
+        on_open: ({ via }: { via: ColumnPickerOpenVia }) => {
+          events.push([`open`, via])
+          props.open = false
+        },
+        on_close: ({ via }: { via: ColumnPickerCloseVia }) => events.push([`close`, via]),
+      })
+      render(ColumnPicker, props)
+      await tick()
+      await click(get_trigger())
+      await tick()
+      expect(events).toEqual([
+        [`open`, `trigger`],
+        [`close`, `programmatic`],
+      ])
       expect(menu()).toBeNull()
     })
 

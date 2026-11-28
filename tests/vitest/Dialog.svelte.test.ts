@@ -90,10 +90,11 @@ describe(`Dialog`, () => {
   ] as const)(
     `closedby=%s closes on %s with its reason and restores focus`,
     async (closedby, dismissal, via) => {
-      const on_close = vi.fn()
-      mount_dialog({ closedby, on_close })
+      const [on_open, on_close] = [vi.fn(), vi.fn()]
+      mount_dialog({ closedby, on_open, on_close })
       trigger().focus()
       await click(trigger())
+      expect(on_open).toHaveBeenCalledExactlyOnceWith({ via: `trigger` })
 
       const dialog = open_surface()
       press_dialog_at(dialog, 50, 50) // a press inside the box never dismisses
@@ -115,9 +116,8 @@ describe(`Dialog`, () => {
   )
 
   test(`snippet, native and controlled closes each report once`, async () => {
-    const on_close = vi.fn()
-    const onclose = vi.fn()
-    const props = mount_dialog({ open: false, on_close, onclose })
+    const [on_open, on_close, onclose] = [vi.fn(), vi.fn(), vi.fn()]
+    const props = mount_dialog({ open: false, on_open, on_close, onclose })
     const reopen = async () => {
       props.open = true
       await tick()
@@ -139,13 +139,67 @@ describe(`Dialog`, () => {
     expect(on_close).toHaveBeenCalledTimes(2)
     expect(on_close).toHaveBeenLastCalledWith({ via: `close` })
 
-    // a controlled close is the consumer's own: it still forwards the native close event
+    // a controlled close reports `programmatic` and still forwards the native close event
     await reopen()
     props.open = false
     await tick()
     expect(surface()).toBeNull()
-    expect([on_close.mock.calls.length, onclose.mock.calls.length]).toEqual([2, 3])
+    expect(on_close).toHaveBeenLastCalledWith({ via: `programmatic` })
+    expect([on_close.mock.calls.length, onclose.mock.calls.length]).toEqual([3, 3])
+    expect(on_open.mock.calls).toEqual([1, 2, 3].map(() => [{ via: `programmatic` }]))
     expect(document.activeElement).toBe(trigger())
+  })
+
+  test.each([
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ])(
+    `mounting with open=%s (sheet: %s) reports nothing; the bound prop reports programmatic`,
+    async (initially_open, sheet) => {
+      const [on_open, on_close] = [vi.fn(), vi.fn()]
+      const props = mount_dialog({ open: initially_open, sheet, on_open, on_close })
+      await tick()
+      expect([on_open.mock.calls, on_close.mock.calls]).toEqual([[], []])
+
+      props.open = !initially_open
+      await tick()
+      props.open = initially_open
+      await tick()
+      expect(Boolean(surface()?.open)).toBe(initially_open)
+      // Sheet forwards both callbacks to its Dialog, which reports each change once
+      const programmatic = [[{ via: `programmatic` }]]
+      expect([on_open.mock.calls, on_close.mock.calls]).toEqual([
+        programmatic,
+        programmatic,
+      ])
+    },
+  )
+
+  // each callback flips the state back once; the flip is a new change, reported in turn
+  test.each([
+    [`on_open closing`, true],
+    [`on_close reopening`, false],
+  ] as const)(`%s the dialog reports the flip back`, async (_label, flip_on_open) => {
+    let flipped = false
+    const flip_back = (open: boolean) => () => {
+      if (flipped) return
+      flipped = true
+      props.open = open
+    }
+    const on_open = vi.fn(flip_on_open ? flip_back(false) : undefined)
+    const on_close = vi.fn(flip_on_open ? undefined : flip_back(true))
+    const props = mount_dialog({ open: !flip_on_open, on_open, on_close })
+
+    await click(flip_on_open ? trigger() : item(`dialog-action`))
+    await tick()
+    expect([props.open, Boolean(surface()?.open)]).toEqual([!flip_on_open, !flip_on_open])
+    const [first, second] = flip_on_open ? [on_open, on_close] : [on_close, on_open]
+    expect([first.mock.calls, second.mock.calls]).toEqual([
+      [[{ via: flip_on_open ? `trigger` : `close` }]],
+      [[{ via: `programmatic` }]],
+    ])
   })
 
   test(`a stale native close cannot close a rapidly reopened dialog`, async () => {
@@ -246,10 +300,13 @@ describe(`Dialog`, () => {
     expect(pane_escape).not.toHaveBeenCalled()
   })
 
-  test(`Sheet forwards Dialog bindings, attributes, snippets, and controls`, async () => {
+  test(`Sheet forwards Dialog bindings, attributes, snippets, controls and callbacks`, async () => {
+    const [on_open, on_close] = [vi.fn(), vi.fn()]
     const props = mount_dialog({
       open: false,
       sheet: true,
+      on_open,
+      on_close,
       class: `consumer-class`,
       closedby: `none`,
       side: `left`,
@@ -267,6 +324,10 @@ describe(`Dialog`, () => {
 
     await click(item(`dialog-action`))
     expect([props.open, document.querySelector(`dialog.sheet`)]).toEqual([false, null])
+    expect([on_open.mock.calls, on_close.mock.calls]).toEqual([
+      [[{ via: `trigger` }]],
+      [[{ via: `close` }]],
+    ])
   })
 
   test.each([

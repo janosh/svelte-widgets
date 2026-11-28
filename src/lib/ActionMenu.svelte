@@ -2,9 +2,16 @@
   import { onDestroy, untrack, type Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { click_outside, type DismissConfig, float } from './attachments/index'
-  import type { ActionMenuTriggerProps, CmdAction, CmdSection } from './types'
+  import type {
+    ActionMenuCloseVia,
+    ActionMenuOpenVia,
+    ActionMenuTriggerProps,
+    CmdAction,
+    CmdSection,
+  } from './types'
   import { focusable } from './attachments/shared'
   import { validate_cmd_actions } from './internal/command'
+  import { track_open } from './internal/open-state.svelte.ts'
   import { chain_handlers } from './utils'
   import { format_shortcut, step_focus } from './shortcuts'
   import type { Placement } from './position'
@@ -42,6 +49,10 @@
     dismiss?: DismissConfig
     item?: Snippet<[{ action: Action; section?: CmdSection<Action>; checked?: boolean }]>
     on_execute?: (detail: { action: Action; section?: CmdSection<Action> }) => unknown
+    // Each real change of the open state (`open`, or `at` in context mode) reports once,
+    // never on mount.
+    on_open?: (detail: { via: ActionMenuOpenVia }) => void
+    on_close?: (detail: { via: ActionMenuCloseVia }) => void
     padding?: number
     strategy?: `fixed` | `absolute`
   } & (ContextMode | DropdownMode)
@@ -55,6 +66,8 @@
     dismiss,
     item,
     on_execute,
+    on_open,
+    on_close,
     open = $bindable(false),
     placement = `bottom`,
     align = `start`,
@@ -85,6 +98,7 @@
       !dismiss?.scope,
   )
   let focus_origin: HTMLElement | SVGElement | null = null
+  let hiding_closed_menu = false // set while show_menu's cleanup hides a closing menu
   let context_open_timeout: ReturnType<typeof setTimeout> | undefined
 
   // A right-click is a zero-size anchor; dropdown mode uses the rendered trigger element.
@@ -116,19 +130,32 @@
     if (active === document.body || closing_menu.contains(active)) focus_origin?.focus()
     focus_origin = null
   }
-  const close = () => {
-    if (trigger_snippet) open = false
-    else at = null
-  }
+  // where a context-mode open places the menu, read by the setter below
+  let next_at: { x: number; y: number } | null = null
+  const change_open = track_open<ActionMenuOpenVia | ActionMenuCloseVia>(
+    () => (trigger_snippet ? open : Boolean(at)),
+    (value) => {
+      if (trigger_snippet) open = value
+      else at = value ? next_at : null
+    },
+    (is_open, via) => {
+      if (is_open)
+        on_open?.({
+          via: via === `trigger` || via === `contextmenu` ? via : `programmatic`,
+        })
+      else on_close?.({ via: via === `contextmenu` ? `programmatic` : via })
+    },
+  )
+  const close = (via: ActionMenuCloseVia) => change_open(false, via)
   // disabling an open menu closes it, so its items can't run while the trigger is disabled
   $effect(() => {
-    if (disabled && (open || at)) untrack(close)
+    if (disabled && (open || at)) untrack(() => close(`programmatic`))
   })
   const trigger_props = $derived<TriggerProps>({
     onclick: (event) => {
       if (!open && (disabled || all_empty)) return
       if (!open) remember_focus_origin(event.currentTarget)
-      open = !open
+      change_open(!open, `trigger`)
     },
     'aria-controls': open ? menu_id : undefined,
     'aria-expanded': open,
@@ -144,14 +171,20 @@
     // Chromium fires contextmenu before pointerup, which would light-dismiss an auto popover
     // opened synchronously from the same gesture.
     context_open_timeout = setTimeout(() => {
-      if (!disabled && !all_empty) at = point
+      if (disabled || all_empty) return
+      // a right-click on an open menu only moves it
+      if (at) at = point
+      else {
+        next_at = point
+        change_open(true, `contextmenu`)
+      }
     }, 0)
   }
 
   onDestroy(() => clearTimeout(context_open_timeout))
 
   function run(action: Action, section?: CmdSection<Action>) {
-    close()
+    close(`select`)
     action.action(action.label)
     on_execute?.({ action, section })
   }
@@ -165,7 +198,11 @@
     node.showPopover(source ? { source } : undefined)
     enabled_items(node)[0]?.focus()
     return () => {
-      if (node.matches(`:popover-open`)) node.hidePopover()
+      if (node.matches(`:popover-open`)) {
+        hiding_closed_menu = true
+        node.hidePopover()
+        hiding_closed_menu = false
+      }
       restore_focus(node)
     }
   }
@@ -175,14 +212,26 @@
   const close_on_secondary_press = (node: HTMLMenuElement) => {
     const on_press = (event: PointerEvent) => {
       const inside = event.target instanceof Node && node.contains(event.target)
-      if (event.button !== 0 && !inside) close()
+      native_dismiss_via = inside ? null : `pointer`
+      if (event.button !== 0 && !inside) close(`pointer`)
+    }
+    // native light-dismiss reports no cause; the last input before it names one
+    const on_key = (event: KeyboardEvent) => {
+      native_dismiss_via = event.key === `Escape` ? `escape` : null
     }
     document.addEventListener(`pointerdown`, on_press, true)
-    return () => document.removeEventListener(`pointerdown`, on_press, true)
+    document.addEventListener(`keydown`, on_key, true)
+    return () => {
+      document.removeEventListener(`pointerdown`, on_press, true)
+      document.removeEventListener(`keydown`, on_key, true)
+    }
   }
+  let native_dismiss_via: `escape` | `pointer` | null = null
 
   const handle_popover_toggle = (event: ToggleEvent) => {
-    if (event.newState === `closed` && anchor) close()
+    const via = native_dismiss_via ?? `programmatic`
+    native_dismiss_via = null
+    if (event.newState === `closed` && anchor && !hiding_closed_menu) close(via)
   }
 
   // Arrows wrap enabled items; Tab closes and resumes page order.
@@ -190,7 +239,7 @@
     if (!(event.currentTarget instanceof HTMLMenuElement)) return
     if (event.key === `Tab`) {
       restore_focus(event.currentTarget)
-      close()
+      close(`tab`)
       return
     }
     step_focus(event, enabled_items(event.currentTarget))
@@ -238,7 +287,7 @@
           inside: trigger_snippet
             ? [...(dismiss?.inside ?? []), trigger_wrapper]
             : dismiss?.inside,
-          callback: close,
+          callback: (_node, _config, { via }) => close(via),
         })}
   >
     {#each actions as entry (is_section(entry) ? entry : entry.id)}

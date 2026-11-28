@@ -1,6 +1,6 @@
 import Toc from '#lib/Toc.svelte'
 import Heading from '#lib/Heading.svelte'
-import type { CollapseMode, TocHeadingData } from '#lib/types.ts'
+import type { CollapseMode, TocCloseVia, TocHeadingData, TocOpenVia } from '#lib/types.ts'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, tick } from 'svelte'
 import {
@@ -592,7 +592,7 @@ describe(`Toc`, () => {
     await click(`aside.toc button`)
     press_key(globalThis, `Escape`)
     await tick()
-    // Same-tick open changes should emit each internal cause separately.
+    // changes are reported from an effect, so opening and closing in one tick nets to nothing
     doc_query(`aside.toc button`).click()
     press_key(globalThis, `Escape`)
     await tick()
@@ -602,9 +602,79 @@ describe(`Toc`, () => {
       { desktop: true, open: false, via: `programmatic` },
       { desktop: false, open: true, via: `trigger` },
       { desktop: false, open: false, via: `escape` },
-      { desktop: false, open: true, via: `trigger` },
-      { desktop: false, open: false, via: `escape` },
     ])
+  })
+
+  // each cause of a mobile open/close change, starting from the opposite state
+  test.each([
+    { initial: false, via: `trigger`, act: () => click(`aside.toc > button`) },
+    {
+      initial: false,
+      via: `programmatic`,
+      act: (props: TocProps) => (props.open = true),
+    },
+    { initial: true, via: `trigger`, act: () => click(`aside.toc > button`) },
+    {
+      initial: true,
+      via: `programmatic`,
+      act: (props: TocProps) => (props.open = false),
+    },
+    { initial: true, via: `pointer`, act: () => click(document.body) },
+    { initial: true, via: `select`, act: () => click(`aside.toc > nav > ol > li`) },
+    { initial: true, via: `escape`, act: () => press_key(globalThis, `Escape`) },
+    {
+      initial: true,
+      via: `tab`,
+      act: () => {
+        doc_query(`aside.toc > nav > ol > li > a`).focus()
+        press_key(globalThis, `Tab`)
+      },
+    },
+  ] as const)(
+    `open=$initial reports $via exactly once and nothing on mount`,
+    async ({ initial, via, act }) => {
+      set_headings(2)
+      set_window_width(600)
+      const [on_open, on_close] = [vi.fn(), vi.fn()]
+      const props = $state<TocProps>({ dynamic: true, on_open, on_close, open: initial })
+      render(Toc, props)
+      await tick()
+      expect([on_open.mock.calls, on_close.mock.calls]).toEqual([[], []])
+
+      await act(props)
+      await tick()
+
+      expect(props.open).toBe(!initial)
+      const [fired, silent] = initial ? [on_close, on_open] : [on_open, on_close]
+      expect(fired).toHaveBeenCalledExactlyOnceWith({ desktop: false, via })
+      expect(silent).not.toHaveBeenCalled()
+    },
+  )
+
+  test(`an on_open that closes the ToC again still reports the close`, async () => {
+    set_headings(2)
+    set_window_width(600)
+    const events: unknown[] = []
+    const props: TocProps = $state({
+      dynamic: true,
+      open: false,
+      on_open: ({ via }: { via: TocOpenVia }) => {
+        events.push([`open`, via])
+        props.open = false
+      },
+      on_close: ({ via }: { via: TocCloseVia }) => events.push([`close`, via]),
+    })
+    render(Toc, props)
+    await tick()
+
+    await click(`aside.toc > button`)
+    await tick()
+
+    expect(events).toEqual([
+      [`open`, `trigger`],
+      [`close`, `programmatic`],
+    ])
+    expect(props.open).toBe(false)
   })
 
   test(`mobile button opens the ToC, cross-fades its icon and centres the active item`, async () => {

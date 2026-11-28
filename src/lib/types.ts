@@ -88,6 +88,24 @@ export type CmdSection<Action extends CmdAction = CmdAction> = {
   selected?: string | null
 }
 
+// What opened or closed a CommandMenu (or PageSearch): `shortcut` a trigger key combo or a
+// non-Escape close key, `escape` Escape, `pointer` a backdrop click, `select` running an
+// action, `programmatic` a change to the bound `open` or a direct dialog.close()
+export type CommandMenuOpenVia = `shortcut` | `programmatic`
+export type CommandMenuCloseVia = CommandMenuOpenVia | `escape` | `pointer` | `select`
+
+// What opened or closed an ActionMenu: `trigger` the dropdown trigger, `contextmenu` a
+// right-click, `pointer` a press outside, `select` choosing an item, `tab` Tab leaving the
+// menu, `programmatic` a change to the bound `open`/`at`, a `disabled` flip or hidePopover()
+export type ActionMenuOpenVia = `trigger` | `contextmenu` | `programmatic`
+export type ActionMenuCloseVia =
+  | `trigger`
+  | `escape`
+  | `pointer`
+  | `select`
+  | `tab`
+  | `programmatic`
+
 export type PageSearchNavigateDetails = {
   query: string
   label: string
@@ -487,13 +505,15 @@ export type TreeNode = {
   disabled?: boolean
 }
 
-// What closed a Popover: `trigger` a click on it or a hover/focus leave, `pointer` a press
-// outside
-export type PopoverCloseVia = `trigger` | `pointer` | `escape`
+// What opened or closed a Popover: `trigger` a click on it or a hover/focus enter/leave,
+// `pointer` a press outside, `programmatic` a change to the bound `open`
+export type PopoverOpenVia = `trigger` | `programmatic`
+export type PopoverCloseVia = PopoverOpenVia | `pointer` | `escape`
 
-// What closed a DraggablePane: `trigger` its toggle button, `close` the pane's close button,
-// `pointer` a press outside
-export type DraggablePaneCloseVia = `trigger` | `close` | `pointer` | `escape`
+// What opened or closed a DraggablePane: `trigger` its toggle button, `close` the pane's
+// close button, `pointer` a press outside, `programmatic` a change to the bound `open`
+export type DraggablePaneOpenVia = `trigger` | `programmatic`
+export type DraggablePaneCloseVia = DraggablePaneOpenVia | `close` | `pointer` | `escape`
 
 // Attributes Popover hands its `trigger` snippet to spread, so consumers keep their own markup
 export type PopoverTriggerProps = {

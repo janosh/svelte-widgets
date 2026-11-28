@@ -130,20 +130,29 @@ describe(`DraggablePane`, () => {
     [`trigger`, (toggle: HTMLElement) => toggle.click(), false],
     [`close`, () => doc_query<HTMLButtonElement>(`.close-button`).click(), true],
     [`pointer`, () => press_release(document.body), false],
-  ] as const)(`closes via %s`, async (via, dismiss, has_been_dragged) => {
-    const on_close = vi.fn()
-    const { toggle, pane } = await open_pane({ on_close, has_been_dragged })
+    [`escape`, () => press_escape(), false],
+  ] as const)(
+    `opens via trigger, closes via %s`,
+    async (via, dismiss, has_been_dragged) => {
+      const [on_open, on_close] = [vi.fn(), vi.fn()]
+      const { toggle, pane } = await open_pane({ on_open, on_close, has_been_dragged })
+      expect(on_open.mock.calls).toEqual([[{ via: `trigger` }]])
 
-    dismiss(toggle)
-    await tick()
+      dismiss(toggle)
+      await tick()
 
-    expect(is_open(pane)).toBe(false)
-    expect(on_close).toHaveBeenCalledWith({ via })
-  })
+      expect(is_open(pane)).toBe(false)
+      expect([on_open.mock.calls.length, on_close.mock.calls]).toEqual([1, [[{ via }]]])
+    },
+  )
 
   // dismiss_on undefined leaves the pane's own default in force, which is what pins it
-  const mount_toggles = async (dismiss_on?: `press` | `release`, open = false) => {
-    render(TestPaneExternalToggles, { dismiss_on, open })
+  const mount_toggles = async (
+    dismiss_on?: `press` | `release`,
+    open = false,
+    callbacks: PaneProps = {},
+  ) => {
+    render(TestPaneExternalToggles, { dismiss_on, open, ...callbacks })
     await tick()
     return {
       pane: doc_query<HTMLDivElement>(`.draggable-pane`),
@@ -151,6 +160,56 @@ describe(`DraggablePane`, () => {
       trigger: doc_query<HTMLButtonElement>(`[data-testid="pointerdown-trigger"]`),
     }
   }
+
+  // a change event alone: no pointer gesture for click_outside to read as a dismissal
+  const set_checked = (checkbox: HTMLInputElement, checked: boolean) =>
+    fire_input(Object.assign(checkbox, { checked }), undefined, `change`)
+
+  test.each([false, true])(
+    `mounting with open=%s reports nothing; the bound prop reports programmatic`,
+    async (initially_open) => {
+      const [on_open, on_close] = [vi.fn(), vi.fn()]
+      const { pane, checkbox } = await mount_toggles(undefined, initially_open, {
+        on_open,
+        on_close,
+      })
+      expect([on_open.mock.calls, on_close.mock.calls]).toEqual([[], []])
+
+      await set_checked(checkbox, !initially_open)
+      await set_checked(checkbox, initially_open)
+      expect(is_open(pane)).toBe(initially_open)
+      const programmatic = [[{ via: `programmatic` }]]
+      expect([on_open.mock.calls, on_close.mock.calls]).toEqual([
+        programmatic,
+        programmatic,
+      ])
+    },
+  )
+
+  // each callback flips the state back once; the flip is a new change, reported in turn
+  test.each([
+    [`on_open closing`, true],
+    [`on_close reopening`, false],
+  ] as const)(`%s the pane reports the flip back`, async (_label, flip_on_open) => {
+    let flipped = false
+    const flip_back = (open: boolean) => () => {
+      if (flipped) return
+      flipped = true
+      void set_checked(doc_query<HTMLInputElement>(`input[type="checkbox"]`), open)
+    }
+    const on_open = vi.fn(flip_on_open ? flip_back(false) : undefined)
+    const on_close = vi.fn(flip_on_open ? undefined : flip_back(true))
+    const { pane } = await mount_toggles(undefined, !flip_on_open, { on_open, on_close })
+
+    await click(doc_query<HTMLButtonElement>(`button.pane-toggle`))
+    await tick()
+    expect(is_open(pane)).toBe(!flip_on_open)
+    const [first, second] = flip_on_open ? [on_open, on_close] : [on_close, on_open]
+    expect([first.mock.calls, second.mock.calls]).toEqual([
+      [[{ via: `trigger` }]],
+      [[{ via: `programmatic` }]],
+    ])
+  })
 
   // why `release` is the default: dismissing on the press writes checked=false before the
   // click, whose activation flips it back and reopens the pane, uncloseable from that checkbox

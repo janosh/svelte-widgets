@@ -1,10 +1,11 @@
 <script lang="ts">
-  import type { PopoverCloseVia, PopoverTriggerProps } from './types'
+  import type { PopoverCloseVia, PopoverOpenVia, PopoverTriggerProps } from './types'
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import type { DismissConfig } from './attachments/index'
   import { click_outside, float, focus_trap } from './attachments/index'
   import { escape_layer, focusable } from './attachments/shared'
+  import { track_open } from './internal/open-state.svelte.ts'
   import { chain_handlers } from './utils'
   import type { Placement, PositionOptions } from './position'
 
@@ -31,6 +32,7 @@
     trigger,
     trigger_mode = `click`,
     children,
+    on_open,
     on_close,
     id,
     role = `dialog`,
@@ -56,6 +58,7 @@
     trigger?: Snippet<[TriggerProps]>
     trigger_mode?: TriggerMode
     children: Snippet
+    on_open?: (detail: { via: PopoverOpenVia }) => void
     on_close?: (detail: { via: PopoverCloseVia }) => void
   } = $props()
 
@@ -83,11 +86,17 @@
     clear_close_timeout()
   }
 
+  const change_open = track_open<PopoverCloseVia>(
+    () => open,
+    (value) => (open = value),
+    (is_open, via) => {
+      if (is_open) on_open?.({ via: via === `trigger` ? via : `programmatic` })
+      else on_close?.({ via })
+    },
+  )
   const close = (via: PopoverCloseVia) => {
     clear_timeouts()
-    if (!open) return
-    open = false
-    on_close?.({ via })
+    change_open(false, via)
   }
 
   // Native auto popovers own light dismissal and Escape; this only records the close reason
@@ -108,6 +117,9 @@
     const { signal } = listeners
     document.addEventListener(`keydown`, track_native_escape, { signal })
     document.addEventListener(`pointerdown`, track_native_pointer, { signal })
+    // aborted before the teardown's hidePopover(): props read their pre-teardown values
+    // there, so its toggle would pass for a dismissal of a still-open popover
+    node.addEventListener(`toggle`, handle_native_toggle, { signal })
     // The browser's close watcher dismisses an auto popover on Escape, so claim the key from
     // outer layers (e.g. a hosting pane's capture listener would cancel it first) without
     // canceling it ourselves
@@ -147,7 +159,7 @@
     open_timeout = setTimeout(() => {
       if (trigger_mode === scheduled_mode) {
         next_trigger_focus = focusable(target)
-        open = true
+        change_open(true, `trigger`)
       }
     }, open_delay_ms)
   }
@@ -189,7 +201,7 @@
     if (open) return close(`trigger`)
     clear_timeouts()
     next_trigger_focus = focusable(event.currentTarget)
-    open = true
+    change_open(true, `trigger`)
   }
 
   const trigger_props: TriggerProps = $derived.by(() => {
@@ -223,7 +235,6 @@
     {role}
     aria-label={rest[`aria-label`] ?? (rest[`aria-labelledby`] ? undefined : `Popover`)}
     class={[`popover`, rest.class]}
-    ontoggle={chain_handlers(handle_native_toggle, rest.ontoggle)}
     {@attach show_native_popover}
     {@attach float({ anchor, placement, align, offset, padding, match_width, strategy })}
     {@attach native_dismiss
